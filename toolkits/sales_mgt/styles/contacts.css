@@ -1,0 +1,144 @@
+.navbar {
+    position: fixed;
+    top: 0;
+    width: 100%;
+  }
+
+  .no-contacts-container{
+    padding: 0 30px;
+    margin-top: 70px;
+    text-align: center;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%)
+  }
+
+.contacts-container {
+    padding: 0 30px;
+    margin-top: 70px;
+  }
+  
+  .add-contacts{
+    padding: .5rem;
+    background-color: #7b6c53;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: 0.3s ease;
+    box-shadow: 3px 3px 4px rgba(0, 0, 0, 0.15);
+  }
+  
+  .add-contacts:hover{
+    background-color: #8f8f8f;
+  }
+
+  .contacts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3 columns */
+    gap: 20px; /* Space between grid items */
+    padding: 20px;
+}
+
+.contact-card {
+    position: relative;
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.contact-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
+}
+
+.link-icon {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    cursor: pointer;
+    font-size: 20px;
+    color: #007bff;
+    background-color: #fff;
+    border: none;
+    border-radius: 50%;
+    padding: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.contact-card:hover .link-icon {
+    display: block;
+}
+
+
+.contact-card h4 {
+    margin: 0 0 10px;
+    font-size: 1.2rem;
+    color: #333;
+}
+
+.contact-card p {
+    margin: 5px 0;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.linked-tag {
+    display: inline-block;
+    padding: 5px 10px;
+    background-color: #28a745; /* Green background */
+    color: white; /* White text */
+    font-size: 12px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+
+.link-contact-modal {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 10% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 50%;
+    text-align: center;
+    border-radius: 10px;
+}
+
+.modal-content .close {
+    position: absolute;
+    right: 20px;
+    top: 10px;
+    cursor: pointer;
+    font-size: 24px;
+}
+
+
+@media (max-width: 768px) {
+    .contacts-grid {
+        grid-template-columns: repeat(2, 1fr); /* 2 columns for smaller screens */
+    }
+}
+
+@media (max-width: 480px) {
+    .contacts-grid {
+        grid-template-columns: 1fr; /* 1 column for very small screens */
+    }
+}

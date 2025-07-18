@@ -1,0 +1,59 @@
+/* settings.css */
+
+/* .settings-option {
+    display: none;
+} */
+
+.toolkit-menu {
+    display: flex;
+    margin-bottom: 10px;
+    /* justify-content: right; */
+}
+
+.comp {
+    width: 200px;
+    height: 50px;
+    background-color: #c7c7c7;
+    margin-right: 10px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.managecomp label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+    font-family: 'Arial', sans-serif;
+}
+
+.managecomp input[type="text"],
+.managecomp input[type="password"],
+.managecomp input[type="email"],
+.managecomp input[type="submit"],
+.managecomp input[type="tel"],
+.managecomp input[type="date"],
+.managecomp input[type="address"],
+.managecomp select {
+    width: 400px;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-family: 'Arial', sans-serif;
+}
+
+.managecomp input[type="submit"] {
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+    border: none;
+}
+
+.managecomp input[type="submit"]:hover {
+    background-color: #45a049;
+} 

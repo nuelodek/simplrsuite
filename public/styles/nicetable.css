@@ -1,0 +1,85 @@
+  .nice-table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 800px;
+      margin: 20px auto;
+      font-family: Arial, sans-serif;
+      font-size: 10px;
+      overflow-x: auto;
+      display: block;
+  }
+
+  .nice-table th,
+  .nice-table td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+      white-space: nowrap;
+  }
+
+  .nice-table th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: #333;
+      position: sticky;
+      top: 0;
+  }
+
+  .nice-table tr:nth-child(even) {
+      background-color: #f8f8f8;
+  }
+
+  .nice-table tr:hover {
+      background-color: #e8e8e8;
+  }
+
+  .nice-table caption {
+      font-size: 1em;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #333;
+  }
+
+  @media screen and (max-width: 600px) {
+      .nice-table {
+          font-size: 8px;
+      }
+    
+      .nice-table th,
+      .nice-table td {
+          padding: 8px 10px;
+      }
+  }
+
+    .nice-table-button {
+        display: inline-block;
+        padding: 10px 15px;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        font-weight: bold;
+        text-align: center;
+        text-decoration: none;
+        background-color: #f2f2f2;
+        color: #333;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+  
+    .nice-table-button:hover {
+        background-color: #e8e8e8;
+    }
+  
+    .nice-table-button:active {
+        background-color: #d9d9d9;
+    }
+  
+    @media screen and (max-width: 600px) {
+        .nice-table-button {
+            font-size: 12px;
+            padding: 8px 12px;
+        }
+    }
+  

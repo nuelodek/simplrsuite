@@ -1,0 +1,25 @@
+.no-deals-container{
+    padding: 0 30px;
+    margin-top: 70px;
+    text-align: center;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%)
+  }
+
+  .add-deal{
+    padding: .5rem;
+    margin: .7rem;
+    background-color: #7b6c53;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: 0.3s ease;
+    box-shadow: 3px 3px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  .add-deal:hover{
+    background-color: #a19671;
+  }

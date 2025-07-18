@@ -1,0 +1,41 @@
+<script>
+function triggerFunction(functionName) {
+    fetch(`nuerons.php?function=${functionName}`)
+        .then(response => response.text())
+        .then(data => {
+            try {
+                const jsonData = JSON.parse(data);
+                console.log('Function response:', jsonData);
+                // Display the response
+                displayResponse(functionName, jsonData);
+            } catch (error) {
+                console.error('JSON parse error:', error);
+                console.log('Raw response:', data);
+                // Display the raw response in case of error
+                displayResponse(functionName, data);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            // Display the error
+            displayResponse(functionName, 'Error: ' + error.message);
+        });
+}
+
+function displayResponse(functionName, response) {
+    const responseElement = document.getElementById('responseDisplay');
+    const responseParagraph = document.createElement('p');
+    responseParagraph.textContent = `${functionName}: ${JSON.stringify(response)}`;
+    responseElement.appendChild(responseParagraph);
+}
+
+// Automatically call functions when the page loads with 30 seconds interval
+window.onload = function() {
+    setTimeout(() => triggerFunction('analyzeAIAnalytics'), 0);
+    setTimeout(() => triggerFunction('gatherEmployeeData'), 10000);
+    setTimeout(() => triggerFunction('runNeurons'), 0);
+};
+</script>
+
+<div>Functions are automatically triggered on page load with 30 seconds interval.</div>
+<div id="responseDisplay"></div>

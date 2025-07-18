@@ -1,0 +1,522 @@
+<?php
+
+session_start();
+
+if (!isset($_SESSION['employee_id']) && !isset($_SESSION['talent_id'])) {
+    // Redirect to login page or show an error message
+    header("Location: login.php");
+    exit();
+}
+
+$employee_id = isset($_SESSION['employee_id']) ? $_SESSION['employee_id'] : null;
+$talent_id = isset($_SESSION['talent_id']) ? $_SESSION['talent_id'] : null;
+
+$url_employee_id = isset($_GET['unique_id1']) ? substr($_GET['unique_id1'], 3) : null;
+$url_talent_id = isset($_GET['unique_id2']) ? substr($_GET['unique_id2'], 3) : null;
+
+if (($employee_id !== $url_employee_id && $talent_id !== $url_talent_id) && 
+    ($employee_id === null && $talent_id === null)) {
+    // Unauthorized access
+    header("Location: ../unauthorized.php");
+    exit();
+}
+
+// If authorized, continue with the chat functionality
+$chat_url = "https://simplr.com.ng/employees/work/talentmessages.php?unique_id1=rec" . $url_employee_id . "&unique_id2=tal" . $url_talent_id;
+
+include 'db.php';
+      $userCategory = ''; 
+      if (isset($_SESSION['employee_id'])) {
+          $userCategory = 'recruiter';
+      } elseif (isset($_SESSION['talent_id'])) {
+          $userCategory = 'talent';
+      }
+      
+      echo $userCategory;
+ 
+try {
+    // Create a connection to the MySQL database
+    // $conn = new mysqli($host, $username, $password, $database);
+
+    // Check for connection errors
+    if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
+    }
+
+    // Define your SQL query with placeholders
+    $sql = "SELECT chat_url, recruiter_name, talent_name, talent_email, recruiter_email FROM talentchat";
+
+    // Use prepared statements to add placeholders for user input
+    $stmt = $conn->prepare($sql);
+
+    // Check for SQL query preparation errors
+    if (!$stmt) {
+        die("SQL query preparation error: " . $conn->error);
+    }
+
+    // Execute the prepared statement
+    if (!$stmt->execute()) {
+        die("SQL query execution error: " . $stmt->error);
+    }
+
+    // Get the result set
+    $result = $stmt->get_result();
+
+    // Initialize variables outside the loop
+    $talent_name = "";
+    $recruiter_name = "";
+    $talent_email = "";
+    $recruiter_email = "";
+
+    // Check if there are rows returned
+    if ($result->num_rows > 0) {
+        $talentUniqueId = isset($_GET['unique_id1']) ? $_GET['unique_id1'] : null;
+        $recruiterUniqueId = isset($_GET['unique_id2']) ? $_GET['unique_id2'] : null;
+
+        while ($row = $result->fetch_assoc()) {
+            $chatUrlFromDB = urldecode($row["chat_url"]);
+            $parts = parse_url($chatUrlFromDB);
+            parse_str($parts['query'], $urlParams);
+
+            if (
+                isset($urlParams['unique_id1']) && $urlParams['unique_id1'] === $talentUniqueId
+                && isset($urlParams['unique_id2']) && $urlParams['unique_id2'] === $recruiterUniqueId
+            ) {
+                // Handle the match here
+                $recruiter_name = $row["recruiter_name"]; // Retrieve the recruiter's name from the database
+                
+                echo   $recruiter_name;
+                $talent_name = $row["talent_name"]; // Retrieve the talent's name from the database
+                                echo   $talent_name;
+
+                $talent_email = $row["talent_email"]; // Retrieve the talent's email from the database
+                $recruiter_email = $row["recruiter_email"];
+
+                break; // Exit the loop when a match is found
+            }
+        }
+    } else {
+        // No records found
+        echo "No records found.";
+    }
+
+    // Close the database connection
+    $stmt->close();
+    $conn->close();
+} catch (Exception $e) {
+    echo "An error occurred: " . $e->getMessage();
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-L5LD0KTXZS"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-L5LD0KTXZS');
+</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" integrity="sha512-iBBXm8fW90+nuLcSKlbmrPcLa0OT92xO1BIsZ+ywDWZCvqsWgccV3gFoRBv0z+8dLJgyAHIhR35VZc2oM/gI1w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <link rel="shortcut icon" type="image/x-icon" href="vaicon.png">
+    <title>Chat</title>
+    <style>
+        /* CSS styles from chat.php */
+
+        .attachment-label {
+            margin-right: 20px;
+            margin-top: 0px;
+        }
+        .chat-body {
+            flex: 1;
+            /*padding: 20px; */
+            height: auto;         
+            overflow-y: auto;
+            background: none;
+        }
+        .chat-footer {
+            display: flex;
+            align-items: center;  
+            padding: 30px;
+            width:auto;
+            margin-bottom: -15px;
+            border-top: 1px solid #ddd;
+        }
+
+        .typemessage {
+            padding: 10px;
+            border-radius: 5px;
+            width: 750px; /* Fixed width */
+            outline: none;
+            margin-right: 10px;
+        }
+
+        .chat-footer button {
+            background: #007bff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            cursor: pointer; 
+            transition: background 0.3s;
+            margin-left: 10px;
+        }
+
+        .chat-footer button:hover {
+            background: #0056b3;
+        }    
+
+        .file-container {   
+            margin-bottom: 10px;
+            width: auto;
+            height: 20px;
+            padding: 10px;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 20px;
+            background-color: #f3f3f3;
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #4a90e2;
+            transition: width 0.3s ease;
+        }
+        
+    .file-container {
+      margin-bottom: 10px;
+      /*background-color: pink;*/
+      width: auto;
+      height: 20px;
+      padding: 10px;
+    }
+    .file-info {
+      display: inline-block;
+      margin-right: 10px;
+      font-size: 14px;
+    }
+    .remove-btn {
+      cursor: pointer;
+      color: red;
+      font-size: 12px;
+    }
+    .thumbnail {
+      max-width: 20px;
+      max-height: 20px;
+      margin-top: 5px;
+    }
+  
+.talent img,  .recruiter img{
+    margin-top: 10px;
+    width: 100%;
+    border-radius: 10px;
+}
+.talent {
+    float: right;
+    margin: 5px 0; /* Reduced margin */
+    padding: 3px 12px; /* Reduced padding */
+    border-radius: 5px;
+    max-width: 60%;
+    border:none;
+    line-height: 1.5;
+background: #d4f8e8; /* Very light green color */
+    align-self: flex-start;
+    word-wrap: break-word;
+    clear: both;
+    display: inline-block; 
+} 
+ 
+        
+        
+.talent:last-of-type{
+    margin-bottom: 20px; /* Add your desired margin-bottom value */
+}   
+
+   
+   
+.recruiter {
+    float: left;    
+    margin: 5px 0; /* Reduced margin */
+    padding: 3px 12px; /* Reduced padding */
+    border-radius: 5px;
+    max-width: 60%;
+    line-height: 1.5;
+    /*background: #4a90e2;*/
+    background: #f5f5dc; 
+    align-self: flex-start;
+    clear: both;
+    word-wrap: break-word;
+   
+}
+
+.chat-footer {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    margin-top: 10px;
+    border-top: 1px solid #ddd;
+    background: #f6f6f6;
+}
+
+#chat-form input[type="text"] {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    outline: none;
+    margin-right: 10px;
+}
+
+.fa-paperclip {
+    margin: 10px;
+
+}
+
+    </style>
+</head>
+    <body> 
+    <h2> Messages </h2> 
+    
+            <div class="file-container"></div>
+                                    <div class="file-container"></div>
+                        <div class="chat-box chat-body" id="chatWindow"> </div>
+                        <form id="chat-form" action="talentchat.php?unique_id1=<?php echo $_GET['unique_id1']; ?>&unique_id2=<?php echo $_GET['unique_id2']; ?>" method="POST">
+                <div class="chat-footer">          
+                    <label for="file-input" class="attachment-label">   
+                        <i class="fa fa-paperclip"></i>
+                        <input type="file" id="file-input" style="display:none;" multiple>
+                    </label>    
+                    <input type="text" placeholder="Type a message" id="message-input" style="margin-top: 0px;" class="typemessage">
+                    <button id="sendButton" type="submit"><i class="fa fa-paper-plane"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+   <script>
+    function formatChatMessage(message) {
+        const chatMessage = document.createElement('div');
+        chatMessage.className = `${message.user_type}`;
+
+        const textElement = document.createElement('div');
+        textElement.className = '';
+
+        const fileInfoElement = document.createElement('div');
+        fileInfoElement.className = 'file-info';
+
+        let messageText = message.text;
+
+        if (message.file) {
+            const fileName = message.file.name;
+            const fileType = message.file.type;
+            const baseUrl = "https://simplr.com.ng/employees/work";
+            const fileUrl = `${baseUrl}/uploads/${fileName}`;
+
+            if (fileType.startsWith('image/')) {
+                const imgElement = document.createElement('img');
+                imgElement.src = fileUrl;
+                fileInfoElement.appendChild(imgElement);
+            } else if (fileType === 'application/pdf') {
+                const pdfLink = document.createElement('a');
+                pdfLink.href = fileUrl;
+                pdfLink.textContent = 'View PDF';
+                fileInfoElement.appendChild(pdfLink);
+            }
+
+            messageText = messageText.replace(`[File: ${fileName}]`, '').trim();
+        }
+
+        textElement.textContent = messageText;
+
+        const timeElement = document.createElement('div');
+        timeElement.className = 'timeman';
+
+        const timestamp = new Date(message.timestamp);
+        const formattedTime = timestamp.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+        timeElement.textContent = formattedTime;
+
+        chatMessage.appendChild(textElement);
+        if (fileInfoElement.children.length > 0) {
+            chatMessage.appendChild(fileInfoElement);
+        }
+        chatMessage.appendChild(timeElement);
+
+        return chatMessage;
+    }
+
+    let userScrolled = false;
+    let previousMessageCount = 0;
+
+    function loadChatMessages() {
+        const chatBox = document.querySelector('.chat-box');
+        const userCategory = '<?php echo $userCategory; ?>';
+        console.log("userCategory:", userCategory);
+
+        const xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                const formattedMessages = JSON.parse(xhr.responseText);
+
+                chatBox.innerHTML = '';
+
+                formattedMessages.forEach(function (message) {
+                    const chatMessage = formatChatMessage(message);
+                    chatBox.appendChild(chatMessage);
+                });
+
+                if (!userScrolled || formattedMessages.length > previousMessageCount) {
+                    scrollToBottom(chatBox);
+                }
+
+                previousMessageCount = formattedMessages.length;
+            }
+        };
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const unique_id1 = urlParams.get('unique_id1');
+        const unique_id2 = urlParams.get('unique_id2');
+        xhr.open('GET', `talentchat.php?unique_id1=${unique_id1}&unique_id2=${unique_id2}`, true);
+        xhr.send();
+    }
+
+    function submitMessage(event) {
+        event.preventDefault(); // Prevents the default form submission behavior
+          
+        const fileContainer = document.querySelector('.file-container');
+        fileContainer.innerHTML = ''; // Clear the file container after submission
+        const messageInput = document.getElementById('message-input');
+        const fileInput = document.getElementById('file-input');
+        const formData = new FormData();
+        
+        if (messageInput.value.trim() !== '') {
+            formData.append('message', messageInput.value);
+        }
+        
+        if (fileInput.files.length > 0) {
+            formData.append('file', fileInput.files[0]);
+        }
+
+        if (formData.has('message') || formData.has('file')) {
+            const xhr = new XMLHttpRequest();
+
+            const progressBar = document.createElement('div');
+            progressBar.classList.add('progress-bar');
+
+            const progressContainer = document.createElement('div');
+            progressContainer.classList.add('progress-container');
+            progressContainer.appendChild(progressBar);
+
+            const chatBox = document.querySelector('.chat-box');
+            chatBox.appendChild(progressContainer);
+
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    const percentComplete = (event.loaded / event.total) * 100;
+                    progressBar.style.width = percentComplete + '%';
+                }
+            };
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    progressContainer.remove();
+
+                    if (xhr.status === 200) {
+                        messageInput.value = '';
+                        fileInput.value = '';
+
+                        loadChatMessages();
+                    } else {
+                        console.error('Error uploading file:', xhr.status, xhr.statusText);
+                    }
+                }
+            };
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const unique_id1 = urlParams.get('unique_id1');
+            const unique_id2 = urlParams.get('unique_id2');
+            xhr.open('POST', `talentchat.php?unique_id1=${unique_id1}&unique_id2=${unique_id2}`, true);
+            xhr.send(formData);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const chatForm = document.getElementById('chat-form');
+        chatForm.addEventListener('submit', submitMessage);
+
+        loadChatMessages();
+
+        setInterval(loadChatMessages, 1000);
+
+        const chatBox = document.querySelector('.chat-box');
+        chatBox.addEventListener('scroll', function () {
+            userScrolled = chatBox.scrollTop + chatBox.clientHeight < chatBox.scrollHeight;
+        });
+    });
+
+    function scrollToBottom(chatBox) {
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+</script>
+
+<script>
+    function displayFile(file) {
+        const fileContainer = document.querySelector('.file-container');
+        const fileItem = document.createElement('div');
+        fileItem.classList.add('file-item');
+
+        const fileInfo = document.createElement('span');
+        fileInfo.classList.add('file-info');
+        fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
+
+        const thumbnail = document.createElement('img');
+        thumbnail.classList.add('thumbnail');
+
+        if (file.type.startsWith('image')) {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = function(event) {
+                thumbnail.src = event.target.result;
+            }
+            fileItem.appendChild(thumbnail);
+        }
+
+        const removeBtn = document.createElement('span');
+        removeBtn.classList.add('remove-btn');
+        removeBtn.textContent = 'x';
+        removeBtn.addEventListener('click', () => {
+            fileItem.remove();
+            if (fileContainer.childElementCount === 0) {
+                fileContainer.style.display = 'none';
+            }
+        });
+
+        fileItem.appendChild(fileInfo);
+        fileItem.appendChild(removeBtn);
+        fileContainer.appendChild(fileItem);
+        fileContainer.style.display = 'block';
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+</script>
+
+    </body>
+    </html>

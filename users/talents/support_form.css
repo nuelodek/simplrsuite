@@ -1,0 +1,49 @@
+/* support_form.css */
+
+
+
+#support h1 {
+ 
+    color: #333;
+}
+
+#support form {
+    display: flex;
+    flex-direction: column;
+}
+
+#support label {
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+    font-family: 'Arial', sans-serif;
+}
+
+#support select,
+#support textarea,
+#support input[type="file"],
+#support input[type="submit"] {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-family: 'Arial', sans-serif;
+}
+#support select,
+#support textarea,
+#support input[type="file"] {
+    width: 60%;
+}
+
+#support input[type="submit"] {
+    background-color: #4CAF50;
+    color: white;
+    width: 60%;
+    cursor: pointer;
+    border: none;
+
+}
+
+#support input[type="submit"]:hover {
+    background-color: #45a049;
+}

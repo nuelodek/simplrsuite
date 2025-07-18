@@ -1,0 +1,483 @@
+/* Reset some default styles */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap");
+* {
+  font-family: "DM Sans", sans-serif;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+header {
+  position: fixed;
+  width: 100%;
+}
+
+/* Navbar styling */
+.navbar {
+  background-color: #7b6c53;
+  color: #ecf0f1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  margin-bottom: 10px;
+  box-shadow: 4px 5px 8px rgba(0, 0, 0, 0.5);
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  font-size: 1.5rem;
+  margin-right: 0.5rem;
+}
+
+.title {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 1.5rem;
+  margin: 0;
+}
+
+.nav-links a {
+  color: #ecf0f1;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.nav-links a:hover {
+  color: #3498db;
+  font-size: 1rem;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* .searchbar{
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .5rem 1rem;
+  border-radius: .5rem;
+  display: none;
+} */
+
+/* animate how the searchbar dsiplays */
+.searchbar {
+    width: 0;
+    opacity: 0;
+    transition: width 0.3s ease, opacity 0.3s ease;
+    overflow: hidden;
+    background-color: #f0f0f0;
+    color: #010342;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+}
+
+.searchbar.active {
+    width: 300px;
+    opacity: 1;
+}
+
+.plan {
+  font-size: 0.9rem;
+}
+
+.upgrade {
+  color: #3498db;
+  font-weight: bold;
+  text-decoration: none;
+  margin-left: 0.3rem;
+}
+
+.upgrade:hover {
+  text-decoration: underline;
+}
+
+.icons {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.icons span {
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.dropdown-menu {
+  display: none;
+  position: fixed;
+  top: 40px;
+  right: 120px;
+  background-color: white;
+  box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  padding: 10px;
+  z-index: 1000;
+}
+
+/* .hidden {
+    display: none;
+  } */
+
+.dropdown-item {
+  padding: 8px;
+  color: #333;
+  text-decoration: none;
+  display: block;
+}
+
+.dropdown-item:hover {
+  background-color: #f1f1f1;
+}
+
+.modal {
+  display: none; /* Hidden by default */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  align-items: center;
+  justify-content: center;
+}
+
+.item-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 2;
+  overflow: auto;
+}
+
+.item-modal::-webkit-scrollbar {
+  display: none;
+}
+
+.modal-content {
+  background-color: #fff;
+  margin: 5% auto;
+  padding: 20px;
+  border-radius: 8px;
+  width: 60%;
+}
+
+.modal-content form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modal-content label {
+  font-weight: bold;
+}
+
+.modal-content input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.modal-content button {
+  padding: 8px 16px;
+  background-color: #7b6c53;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dynamic-field {
+  display: none;
+}
+
+.close {
+  float: right;
+  font-size: 2rem;
+  cursor: pointer;
+}
+
+.profile {
+  font-size: 1.4rem;
+  border-radius: 50%;
+  background-color: #7f8c8d;
+  padding: 0.2rem;
+}
+
+/* Dashboard layout */
+.dashboard {
+  display: flex;
+  padding: 10rem 1rem 1rem 1rem;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Header Styles */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0.5rem;
+  padding: 1rem;
+  border-radius: 6px;
+  background-color: #f0f0f5;
+  box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.2);
+}
+
+.welcome {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.welcome img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.d-select {
+  padding: 5px;
+  border-radius: 6px;
+  background-color: transparent;
+  border: 1px solid #ccc;
+}
+
+.dropdown {
+  /* position: absolute; */
+  top: 70px;
+  right: 5px;
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  position: fixed;
+  top: 110px;
+  right: 5px;
+  background-color: white;
+  box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+  min-width: 160px;
+  z-index: 1;
+}
+
+.dropdown-content button {
+  padding: 12px 16px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.dropdown-content button:hover {
+  background-color: #f1f1f1;
+}
+
+.reload-btn {
+  background-color: transparent;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.reload-btn img {
+  background-color: transparent;
+  border-radius: 5px;
+  padding: 5px;
+  width: 25px;
+  height: 25px;
+  transition: background-color 0.3s ease;
+}
+
+.reload-btn:hover img {
+  background-color: #8f8f8f;
+}
+
+.dropdown-btn {
+  cursor: pointer;
+  background: none;
+  font-size: 16px;
+  padding: 5px;
+  border-radius: 6px;
+  background-color: transparent;
+  border: 1px solid #ccc;
+}
+
+/* Show the dropdown on button click */
+.show {
+  display: block;
+}
+
+/* Grid Overview layout */
+.grid-overview {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, 1fr); /* Ensures two columns per row */
+}
+
+.box {
+  background-color: #f4f4f4;
+  padding: 2rem;
+  border-radius: 5px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  width: 500px;
+  height: 450px;
+}
+
+#salesOverviewBox {
+  display: block;
+}
+
+#upcomingMeetingsBox {
+  display: block;
+}
+
+#customerOverviewBox {
+  display: block;
+}
+
+#revenueTrendBox {
+  display: block;
+}
+
+#leadSourcesBox {
+  display: none;
+}
+
+#dealsByStageBox {
+  display: none;
+}
+
+.meeting-card {
+  background-color: #ec8d8d;
+  display: flex;
+  flex-direction: column; /* Update layout to vertical for better stacking */
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0rem 1rem 1rem 0rem;
+  margin: 0.5rem 0;
+  border-radius: 5px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  text-align: left;
+  width: 100%;
+}
+
+.meeting-tag {
+  background-color: #f4f4f4;
+  margin-top: 0px;
+  padding: 0.5rem;
+  border-radius: 0 0 5px 0;
+  font-size: 14px;
+  font-weight: bold;
+  color: #7b6c53;
+  margin-bottom: 0.5rem;
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.meeting-details {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  padding-left: 1rem;
+}
+
+.footer {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 2rem;
+  align-items: center;
+  justify-content: center;
+  background-color: #eee2b5;
+  color: #0f0f0f;
+}
+
+/* Calendar Styles */
+.calender {
+  display: none;
+}
+
+.calender.active {
+  display: block;
+  position: fixed;
+  top: 30%;
+  right: 2px;
+  transform: translate(-50%, -50%);
+  background-color: #fff;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  padding: 10px;
+  width: 300px;
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.day {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #f4f4f4;
+  cursor: pointer;
+}
+
+.day.today {
+  background-color: #007bff;
+  color: white;
+}
+
+.day.empty {
+  visibility: hidden;
+}
+
+/* Add responsive adjustments */
+@media (max-width: 768px) {
+  header {
+    position: fixed;
+    width: 100%;
+  }
+  .navbar {
+    flex-direction: column;
+  }
+
+  .dashboard {
+    padding: 10rem 1rem 1rem 1rem;
+  }
+  .grid-overview {
+    grid-template-columns: 1fr;
+  }
+}

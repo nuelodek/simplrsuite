@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html> 
+<head>
+    <meta charset="UTF-8" />
+    <title>Sign Up / Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
+    <style>
+      
+   body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: white;
+            font-family: sans-serif;
+            display: flex;
+            box-sizing: border-box;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        
+         .container {
+            background-color: white;
+            width: 500px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        input {
+            padding: 10px 10px; 
+            border-radius: 5px;
+            /*border: none;*/
+            margin-bottom: 10px;
+        }
+
+        .word {
+            font-size: 30px;
+            margin-bottom: 0px;
+        }
+
+        input[type="submit"]:hover {
+            background-color: black;
+            color: white;
+        }
+
+        p {
+            line-height: 1.0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+<form id="authForm" action="logintalent.php" method="post">
+    <h3 class="word">SIMPLR</h3>
+    <p id="formDescription">Login your all-in-one talent account</p>
+
+    <label>Email Address*</label>
+    <input type="email" name="email" placeholder="name@email.com" required>
+    <label>Password*</label>
+    <input type="password" name="password" placeholder="********" required>
+  
+    <input type="submit" value="Login"> 
+    <div style="display:flex; flex-direction:column;">      
+    <small>No account yet? <a href="talentsignup.php" id="toggleFormLink">Signup</a></small>
+    <small>Lost your password? <a href="forgetpassword.php" id="resetlink">Reset</a></small>
+
+ </div>
+
+</form>
+</div>
+
+</body>
+</html>
