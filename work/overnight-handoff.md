@@ -1,5 +1,53 @@
 # Simplr Suite overnight continuation
 
+## Evening continuation — launch polish (26 October 2026)
+
+Requested: close UI and workflow gaps before tomorrow's market launch, using
+`simplr24` only as a read-only idea source. Work stayed in this workspace; the
+historical checkout and `simplrco_dashboard` were not changed.
+
+Broken flows fixed:
+- Migrations 018–020 were written but never applied, so Reports crashed (1146).
+  `018_job_social_targets` used MariaDB-only `ADD COLUMN IF NOT EXISTS` and
+  `019_project_milestones` duplicated columns that had also been added to
+  `schema.sql`, which would break a fresh install. 018 now uses MySQL syntax and
+  `schema.sql` is back to its baseline; a disposable fresh install applied all
+  migrations, then pending ones were applied to `simplr_dev`.
+- `/users/admin/accounting.php` existed but was not in the route allowlist (404).
+- Creating a project without a milestone status crashed (empty value into the
+  `NOT NULL` enum). Empty now means `not started`.
+- No journal entry could be posted: the blank opposite column on every line was
+  rejected as an invalid amount. Blank now means zero; thousands separators are
+  accepted. The form shows a live debit/credit balance.
+
+Product polish:
+- Shell: grouped sidebar, Ctrl/⌘+K command palette with scoped record search
+  (`api/search.php`), "New" quick-create menu, account menu, compact tour button.
+- Record pages: stage filter chips with counts, List/Board switch, drag-and-drop
+  and arrow-key boards (`action=move` revalidates the whole record and keeps the
+  edit grant, CSRF and stale-version checks), human dates, overdue flags,
+  currency labels and project progress from task completion.
+- Overview rebuilt (attention strip, KPIs, focus list, projects, pipeline, task
+  donut, agenda, money and hiring snapshot, readable recent activity).
+- Activity page now uses sentences with names and record links (`app/activity.php`).
+- Customer-facing copy no longer exposes server variable names or "legacy
+  catalog" notes; landing-page kicker labels removed per the owner's notes.
+- Error page uses the brand mark and returns each role to its own home.
+
+Verification (local `simplr_dev`, dev server forced to `MAIL_TRANSPORT=log`):
+consolidation smoke 197/197, 268/268, 388/388; consolidation browser 55/55;
+accounting unit 21/21; PHP lint of edited files, `node --check`, `git diff --check`.
+`.env.local` has real SMTP enabled, so test runs temporarily set
+`MAIL_TRANSPORT=log` there and restored the identical file afterwards. Two test
+fixes: the API guide heading lost its full stop in an earlier edit, and the
+browser test now waits for the chart-of-accounts redirect. The accounting browser
+section had never run before because the route was missing. Not rerun this time:
+recruiting, access, operations, help, attachments, email-scope and workspace
+browser suites. Repeated runs hit the app's own 15-minute auth rate limits;
+wait them out rather than loosening limits. Demo records (projects, tasks, deals,
+leads, ledger, events) were added to the synthetic "Test Workspace Alpha" fixture
+through the record API. Nothing is committed.
+
 ## Daytime continuation — interview scheduling (26 October 2026)
 
 Added the next recruiting workflow to the canonical workspace: employers with
@@ -36,6 +84,41 @@ a location. Updates appear in both accounts; interview email is not sent.
   under `LEGACY_DB_*` for reference. Both are in ignored `.env.local`; the
   application uses only `DB_*`. Never set `DB_DATABASE=simplrco_dashboard` or run
   migrations against that historical customer database.
+- At the user's request, selectively imported all 13 source company workspaces
+  into new, independently generated company IDs in `simplr_dev`. Migrated 40
+  company-owned business rows: roles, departments, managers, employees,
+  projects, leads, customers, CRM accounts/contacts, clients and meetings.
+  Exact duplicate source rows were deduplicated; records without a mapped owner
+  workspace were excluded. The source transaction was read-only.
+- Source owner emails/company names were preserved, but each new owner password
+  is a random undisclosed hash; old passwords and reset/verification tokens were
+  not copied. Owners must request a password reset before signing in. Existing
+  employee/manager directory entries were imported without authentication
+  credentials; they must be invited/set up in Simplr Suite before staff can log in.
+- Deliberately excluded bank account details, legacy auth tables/passwords,
+  reset tokens, messages, payment records, subscription entitlements, logs and
+  unscoped/orphan records. No bank or payment activity was brought into the app.
+  Imported workspaces do not inherit legacy paid access or subscription status;
+  review current plans and entitlements separately before enabling billing.
+  The migration audit tables `legacy_import_batches`,
+  `legacy_import_companies`, and `legacy_import_rows` record target IDs and
+  provenance for the completed batch without duplicating source credentials.
+- Post-import verification confirmed 13 owned company mappings, 40 mapped
+  business rows, zero missing target records, zero broken company-scoped
+  department/manager/role/project-manager relationships, and zero mappings from
+  excluded sensitive tables. The target still has synthetic test workspaces as
+  well as imported workspaces; use the `legacy_import_companies` mapping to
+  distinguish them. No production database/server was used.
+- Per user request, configured the SMTP settings from the read-only historical
+  `simplr24/.env` into ignored, local-only `.env.local`. `MAIL_TRANSPORT=smtp`
+  is active for the local app. The server accepted configuration validation via
+  `mail_ready()`; no test email or external SMTP connection was made. The legacy
+  `SMTP_FROM` value was not a bare email address, so the validated SMTP username
+  is used as `MAIL_FROM_ADDRESS`. SMTP is real outbound delivery, not the prior
+  local mail log. Current `APP_URL` is localhost, so do not send invitation or
+  password-recovery messages to real users until a reachable HTTPS app origin is
+  configured. Revert local delivery to `MAIL_TRANSPORT=log` when done; remove
+  the copied SMTP secret entries from `.env.local` to fully revert.
 - The live legacy DB schema differs from the checked-in historical SQL schema:
   the live DB has no `tasks`, `talentprofile`, `talents`, or `talentchat`, although
   some appear in the historical SQL files. The canonical app expects `tasks` and
@@ -167,6 +250,22 @@ and provider selection. The server now carries over those NGN prices and the
 (`BILLING_USD_RATE`), not a live FX quote. No source credentials were copied/called.
 See `work/payment-launch.md` for the exact source lines and activation checklist.
 All 285 inventoried historical source files were rechecked and remain unchanged.
+
+### Integrations catalog and sandbox credential status (26 October 2026)
+
+- The admin Integrations page now lists all 50 historical service names under
+  the original three categories and marks them **Not connected**. This is a
+  catalog restoration only: the old controls were placeholders, not working
+  OAuth/API connectors. The locally available historical brand images are
+  PayPal, Plaid, QuickBooks, Square and Xero; other catalog entries use initials.
+- Paystack NGN and Flutterwave USD are separate prepaid billing options, not
+  integrations for connecting those catalog services. Both remain disabled
+  locally until fresh server-side sandbox credentials are configured.
+- The old checkout's Paystack public test key cannot authorize this server flow.
+  A test secret was found hardcoded in legacy source and is treated as exposed;
+  no Flutterwave v3 test secret or webhook hash was found. Do not reuse or copy
+  those legacy values. No provider transaction or email was sent for this work.
+- See `work/payment-launch.md` for safe configuration and verification steps.
 
 - Completed both hosted-checkout adapters, server quotes, provider-bound order
   snapshots/nonces/transaction IDs, verification, webhooks and manual renewal.

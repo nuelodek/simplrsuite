@@ -54,6 +54,10 @@ database. No JavaScript build step is needed.
 3. For local testing, use `APP_ENV=local`, `APP_URL=http://127.0.0.1:8000`, and
    `MAIL_TRANSPORT=log`. Test emails are written to `storage/mail/`, which the
    development router and Apache rules prevent from being served.
+   Setting `MAIL_TRANSPORT=smtp` sends real email. Before using SMTP for account
+   invitations or password recovery, configure `APP_URL` (and audience URLs, when
+   used) to a reachable HTTPS deployment; otherwise message links may point to
+   localhost. Keep SMTP credentials only in private environment configuration.
 4. Install the schema and migrations:
 
    ```powershell
@@ -84,6 +88,17 @@ serving the repository directly without its deny rules can expose private files.
 - Business signup, verification, login, password recovery, and sign out.
 - Shared responsive dashboard and 23 record work areas, with search, pagination,
   validated create/edit forms, tenant checks, and stale-edit protection.
+- Overview dashboard with overdue alerts, live KPIs (active projects, open tasks,
+  open pipeline, month's net cash), a focus list, project progress from task
+  completion, pipeline and task charts, upcoming events and readable activity.
+- Workspace search and command palette (Ctrl/⌘+K or `/`): jump to pages, start
+  new records, and search records in the tools the signed-in person can open
+  (`GET /api/search.php?q=`, company-scoped, same grants as the record pages).
+- Stage filters on record lists and drag-and-drop boards for tasks, projects,
+  deals, leads, products, objectives, incidents and compliance. Cards also move
+  with the arrow keys. A move revalidates the whole record and uses the same
+  edit grant, CSRF and stale-version checks as the edit form
+  (`POST /api/records.php?module=…` with `action=move`).
 - Employee and manager directories and email invitations. Invitees choose their
   own password. Inviting does not immediately change an existing password.
 - Staff sign-in and scoped workspaces. Employees update their assigned task
@@ -126,10 +141,23 @@ Billing offers **Paystack for NGN and Flutterwave for USD**, following the origi
 `simplr24` currency/provider choice. The server owns prices, conversion, orders and
 payment verification. Checkout remains disabled without provider configuration.
 See `work/payment-launch.md` for source pricing, setup, tests and remaining gates.
+The Integrations page also lists all 50 services advertised by the old dashboard
+as **Not connected**; their old buttons did not implement API connections. It
+shows the matching local logos that were available for PayPal, Plaid, QuickBooks,
+Square and Xero. The remaining legacy entries need proper connector work and
+assets before they can be offered as functional integrations. Sandbox checkout
+also remains disabled until fresh Paystack and Flutterwave server-side test
+credentials are configured; the old public key and exposed legacy secret are not
+reused.
 
 Amounts in existing finance tables are recorded amounts; this build does not
 execute payroll payments, calculate statutory payroll, issue compliant tax invoices, or
-fetch live banking balances. The invoice area is an invoice register.
+fetch live banking balances. The invoice area is an invoice register. The Accounting
+page provides a separate company-scoped chart of accounts, balanced journal entries,
+an income statement, a balance sheet and three management ratios. Existing ledger
+records are not imported; enter opening balances as a balanced journal entry. These
+reports are not audited or tax statements and should be reconciled with a qualified
+accountant.
 
 ## Verification
 
@@ -141,6 +169,7 @@ python scripts/smoke_test.py
 python scripts/talent_smoke_test.py
 # Includes core and talent checks, then staff recovery and consolidation checks:
 python scripts/consolidation_smoke_test.py
+php scripts/accounting_unit_test.php
 python scripts/marketing_smoke_test.py
 node scripts/consolidation_browser_test.cjs
 node --check public/scripts/suite.js

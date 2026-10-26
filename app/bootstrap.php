@@ -38,7 +38,13 @@ function json_response(array $body, int $status = 200): never {
 function fail(string $message, int $status = 400): never {
     if (wants_json()) json_response(['ok' => false, 'error' => $message], $status);
     http_response_code($status);
-    echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Simplr · Please try again</title><link rel="stylesheet" href="/public/styles/suite.css"><body class="auth-page"><main class="auth-card"><a class="brand" href="/">simplr<span>suite</span></a><h1>Let’s get you back on track.</h1><p role="alert">' . e($message) . '</p><a class="button" href="/users/admin/login.php">Return to sign in</a></main></body></html>';
+    [$home,$label] = match ($_SESSION['auth_role'] ?? '') {
+        'admin' => ['/users/admin/newdashboard.php','Return to your workspace'],
+        'employee','manager' => ['/users/employees/workspace.php','Return to your workspace'],
+        'talent' => ['/users/talents/talentpool.php','Return to your profile'],
+        default => ['/users/admin/login.php','Return to sign in'],
+    };
+    echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Simplr · Please try again</title><link rel="icon" href="/public/images/brand.svg" type="image/svg+xml"><link rel="stylesheet" href="/public/styles/suite.css"><body class="auth-page"><main class="auth-card error-card"><a class="brand" href="/" aria-label="Simplr Suite home"><span class="brand-mark">s</span>simplr<span class="brand-suffix">suite</span></a><h1>Let’s get you back on track.</h1><p role="alert">' . e($message) . '</p><a class="button" href="' . $home . '">' . $label . '</a></main></body></html>';
     exit;
 }
 set_exception_handler(function (Throwable $error): never {

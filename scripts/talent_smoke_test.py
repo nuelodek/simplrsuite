@@ -40,6 +40,7 @@ try:
     expect(code == 200 and '/talentpool.php' in url and name in body, 'Verified talent can sign in')
     expect(before != after, 'Talent login rotates session')
     expect('Talent workspace' in body and '/users/admin/newdashboard.php' not in body, 'Talent receives dedicated navigation')
+    expect('data-dashboard-tour' in body and 'Find opportunities' in body and '/users/talents/applications.php' in body, 'Talent dashboard tour explains role-specific navigation')
     expect(talent.request('/api/records.php?module=employees',api=True)[0] == 401, 'Talent cannot read business API')
     expect(talent.request('/users/admin/talent-directory.php',api=True)[0] == 401, 'Talent cannot read employer directory')
     fixture = json.loads((ROOT / '.local/browser-fixture.json').read_text())

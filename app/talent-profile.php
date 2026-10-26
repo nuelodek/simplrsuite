@@ -36,7 +36,7 @@ $version = hash('sha256', json_encode(db_one($db, 'SELECT * FROM talent_portfoli
 if (http_response_code() === 409) $version = input('version');
 suite_start('My talent profile','profile', ['company_name'=>$user['full_name'],'email'=>$user['email']]);
 ?>
-<div class="page-heading"><div><span class="eyebrow">YOUR NEXT CHAPTER</span><h1>Put your experience in focus.</h1><p>A clear profile helps employers understand the work you want to do.</p></div><span class="badge"><?= $profile['visibility'] === 'listed' ? 'Listed for employers' : 'Private profile' ?></span></div>
+<div class="page-heading"><div><h1>My talent profile</h1><p>Manage the professional details employers can see when your profile is listed.</p></div><span class="badge"><?= $profile['visibility'] === 'listed' ? 'Listed for employers' : 'Private profile' ?></span></div>
 <?php if ($errors): ?><div class="notice error" role="alert"><?php foreach ($errors as $error): ?><p><?= e($error) ?></p><?php endforeach; ?></div><?php endif; ?>
 <div class="notice info">You control your visibility. Employers can see only the professional details below when you list your profile. Your sign-in email stays private in the directory. Applying for a role shares a separate copy of your profile and contact email with that employer, with your consent. You can attach a PDF resume when applying. Direct messaging is not available yet.</div>
 <section class="panel record-form"><div class="panel-heading"><div><h2><?= e($user['full_name']) ?></h2><p class="subtle"><?= e($user['industry']) ?> · <?= e($user['email']) ?></p></div></div>

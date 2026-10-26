@@ -72,6 +72,36 @@ echo json_encode($out);
     expect(code==200 and title in body and '&lt;script&gt;' in body and '<script>alert(1)</script>' not in body,'Public role displays escaped content')
     expect(talent_fixtures[0]['email'] not in body and fixture['email'] not in body,'Public job does not expose account emails')
     expect(title in anon.request('/jobs/?q='+title.replace(' ','+'),api=False)[1],'Published role appears in searchable jobs board')
+    talent_csrf,talent_body=talent.form('/users/talents/talentpool.php')
+    profile={'csrf_token':talent_csrf,'version':hidden(talent_body,'version'),'headline':'Recruiting check profile','visibility':'listed'}
+    expect(talent.request('/users/talents/talentpool.php',profile)[0]==200,'Talent opts into recruiter directory')
+    directory='/users/admin/talent-directory.php?q=Recruiting+Check+0'
+    admin_csrf,directory_body=admin.form(directory)
+    expect('Recruiting Check 0' in directory_body and talent_fixtures[0]['email'] not in directory_body,'Recruiter can discover listed talent without seeing private email')
+    expect(admin.request(directory,{'action':'shortlist','talent_id':talent_fixtures[0]['id']})[0]==419,'Shortlisting requires CSRF')
+    code,body,_=admin.request(directory,{'csrf_token':admin_csrf,'action':'shortlist','talent_id':talent_fixtures[0]['id'],'q':'Recruiting Check 0'})
+    expect(code==200 and 'Remove from shortlist' in body,'Recruiter can save talent to a company shortlist')
+    beta_directory='/users/admin/talent-directory.php?shortlist=1&q=Recruiting+Check+0'
+    expect('Your shortlist is empty.' in beta.request(beta_directory,api=False)[1],'Talent shortlists are isolated by company')
+    invite={'csrf_token':admin_csrf,'action':'invite','talent_id':talent_fixtures[0]['id'],'job_id':job_id,'q':'Recruiting Check 0'}
+    expect(admin.request(directory,invite)[0]==200,'Recruiter can invite listed talent to a published role')
+    offer={'csrf_token':admin_csrf,'action':'hire_offer','talent_id':talent_fixtures[0]['id'],'role_title':'Senior product designer','message':'We would like to make you an offer.','q':'Recruiting Check 0'}
+    expect(admin.request(directory,offer)[0]==200,'Recruiter can send direct hire offer')
+    opportunity_path='/users/talents/opportunities.php'
+    talent_csrf,opportunities=talent.form(opportunity_path)
+    expect('Invitation to apply' in opportunities and 'Direct hire offer' in opportunities,'Talent receives recruiter invitations and offers in account')
+    expect('Accept hire offer' in opportunities and 'I agree to share these details' in opportunities,'Talent offer shows explicit contact-sharing consent')
+    expect('Direct hire offer' not in other.request(opportunity_path,api=False)[1],'Recruiter messages are private to the intended talent account')
+    offer_fragment=opportunities[opportunities.index('Direct hire offer'):]
+    offer_fragment=offer_fragment[:offer_fragment.index('Accept hire offer')]
+    offer_id=re.search(r'name="id" value="(\d+)"',offer_fragment).group(1)
+    offer_version=re.search(r'name="version" value="([^"]+)"',offer_fragment).group(1)
+    expect(talent.request(opportunity_path,{'csrf_token':talent_csrf,'id':offer_id,'version':offer_version,'response':'accept'})[0]==422,'Talent must consent before accepting hire offer')
+    code,body,_=talent.request(opportunity_path,{'csrf_token':talent_csrf,'id':offer_id,'version':offer_version,'response':'accept','consent':'1'})
+    expect(code==200 and 'Hire offer accepted.' in body,'Talent accepts direct hire offer')
+    code,body,_=admin.request(directory)
+    expect(code==200 and 'Accepted hire offers' in body and talent_fixtures[0]['email'] in body,'Employer sees contact details only after accepted hire offer')
+    expect(talent_fixtures[0]['email'] not in beta.request('/users/admin/talent-directory.php',api=False)[1],'Accepted hire details remain private to the hiring company')
     beta_token,_=beta.form('/users/admin/workspace.php?module=jobs&action=new')
     expect(beta.request('/api/records.php?module=jobs',{**update,'csrf_token':beta_token,'version':job['version']})[0]==404,'Other company cannot edit published role')
     grant(admin,'employee',access['employee_id'],{})
@@ -79,6 +109,9 @@ echo json_encode($out);
     grant(admin,'employee',access['employee_id'],{'jobs':'view','applications':'view'})
     staff_token,_=employee.form('/users/help.php')
     expect(employee.request('/api/records.php?module=jobs',{**values,'csrf_token':staff_token})[0]==403,'Viewer cannot publish jobs')
+    expect(employee.request(directory)[0]==200,'Recruiting staff with jobs view access can read talent directory')
+    staff_directory_csrf,_=employee.form(directory)
+    expect(employee.request(directory,{'csrf_token':staff_directory_csrf,'action':'shortlist','talent_id':talent_fixtures[0]['id']})[0]==403,'Recruiting staff without edit access cannot change shortlist')
     csrf,body=talent.form(apply)
     payload={'csrf_token':csrf,'job_version':hidden(body,'job_version'),'profile_version':hidden(body,'profile_version'),'candidate_note':'I would love to help. <img src=x onerror=alert(1)>','consent':'1','company_id':'1','account_id':talent_fixtures[1]['id'],'status':'hired','email':'forged@example.test'}
     expect(talent_fixtures[0]['email'] in body and 'Profile shared with this employer' in body,'Candidate reviews exact shared profile and contact email')

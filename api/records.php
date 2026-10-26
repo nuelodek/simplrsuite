@@ -16,6 +16,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
 }
 require_post();
 $action = input('action') ?: 'create';
+if ($action === 'move') {
+    $id = filter_var($_POST['id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+    if (!$id) fail('Choose a record to move.',422);
+    json_response(['ok'=>true,'id'=>$id,'version'=>move_record_stage($db,$companyId,$key,$id,input('stage'),input('version'))]);
+}
 if (!in_array($action,['create','update'],true)) fail('Choose create or update.',422);
 $id = $action === 'update' ? filter_var($_POST['id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]) : null;
 if ($action === 'update' && !$id) fail('Choose a record to update.',422);

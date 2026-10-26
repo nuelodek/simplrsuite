@@ -63,7 +63,39 @@ async function localOnly(context) {
     await page.locator('[name=password]').fill(fixture.password);
     await page.getByRole('button',{name:/Sign in/}).click();
     await page.waitForURL('**/users/admin/newdashboard.php');
-    check(await page.getByRole('heading',{name:'Your business, at a glance.'}).isVisible(), 'Business dashboard still works after consolidation');
+    check(await page.getByRole('heading',{name:'Business overview'}).isVisible(), 'Business dashboard still works after consolidation');
+    check(await page.getByRole('link',{name:/Accounting/}).isVisible(), 'Business dashboard links to accounting');
+    await page.goto('http://127.0.0.1:8000/users/admin/accounting.php');
+    check(await page.getByRole('heading',{name:'Accounting',exact:true}).isVisible(), 'Accounting page opens for the signed-in business owner');
+    await page.getByRole('button',{name:'Create standard chart'}).click();
+    // The fake clock installed for the toast checks stalls in-page polling until navigation settles.
+    await page.waitForURL('**/accounting.php#accounts');
+    const journalForm = page.locator('form:has(input[name="action"][value="post_entry"])');
+    const postJournal = async (description, firstAccount, firstField, firstAmount, secondAccount, secondField, secondAmount) => {
+      await journalForm.locator('[name="description"]').fill(description);
+      await journalForm.locator('[name="account_id[]"]').nth(0).selectOption({label:firstAccount});
+      await journalForm.locator(`[name="${firstField}[]"]`).nth(0).fill(firstAmount);
+      await journalForm.locator('[name="account_id[]"]').nth(1).selectOption({label:secondAccount});
+      await journalForm.locator(`[name="${secondField}[]"]`).nth(1).fill(secondAmount);
+      await journalForm.getByRole('button',{name:'Post balanced entry'}).click();
+      await page.waitForURL('**/users/admin/accounting.php*');
+    };
+    await postJournal('Opening balance','1000 · Cash and bank','debit','1000.00',"3000 · Owner's equity",'credit','1000.00');
+    await postJournal('Service revenue','1000 · Cash and bank','debit','300.00','4000 · Sales revenue','credit','300.00');
+    await postJournal('Operating expense','6000 · Operating expenses','debit','100.00','1000 · Cash and bank','credit','100.00');
+    check(await page.getByText(/1,200\.00/).count() >= 2, 'Posted entries produce matching balance-sheet totals');
+    check(await page.getByText(/\b200\.00\b/).count() >= 1, 'Income statement shows net income from posted entries');
+    check(await page.getByText('66.67%',{exact:true}).isVisible(), 'Accounting ratios use posted statement values');
+    await page.getByRole('button',{name:'Dashboard tour'}).click();
+    const tour = page.locator('[data-dashboard-tour]');
+    check(await tour.isVisible() && await tour.getByRole('heading',{name:'Navigate your workspace'}).isVisible(), 'Business dashboard tour opens');
+    await tour.getByRole('button',{name:'Next'}).click();
+    check(await tour.locator('[data-tour-step]:visible h3').innerText() === 'Overview', 'Business tour explains the dashboard overview');
+    check(await tour.getByRole('link',{name:'Overview'}).getAttribute('href') === '/users/admin/newdashboard.php', 'Business tour links directly to the overview');
+    while (await tour.getByRole('button',{name:'Next'}).count()) await tour.getByRole('button',{name:'Next'}).click();
+    check(await tour.getByRole('button',{name:'Finish tour'}).isVisible(), 'Business tour reaches its final step');
+    await tour.getByRole('button',{name:'Finish tour'}).click();
+    check(!await tour.isVisible(), 'Business tour closes when finished');
     await page.goto('http://127.0.0.1:8000/users/admin/workspace.php?module=projects&action=edit&id=' + fixture.project_id);
     await page.locator('[name=projectName]').fill('Workspace launch');
     await page.getByRole('button',{name:/Save/}).click();
@@ -80,7 +112,7 @@ async function localOnly(context) {
     check(await page.getByRole('button',{name:'Open navigation'}).evaluate(el => el === document.activeElement), 'Mobile navigation restores focus on Escape');
     await page.screenshot({path:path.join(evidence,'dashboard-consolidated-mobile.png'),fullPage:true});
     await page.goto('http://127.0.0.1:8000/users/developers/documentation.php');
-    check(await page.getByRole('heading',{name:'Workspace API guide.'}).isVisible(), 'Consolidated API guide opens');
+    check(await page.getByRole('heading',{name:'Workspace API guide'}).isVisible(), 'Consolidated API guide opens');
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'API guide fits mobile viewport');
     const staff = JSON.parse(fs.readFileSync(path.join(root,'.local/recovery-browser-fixture.json'),'utf8'));
     await page.goto('http://127.0.0.1:8000/users/employees/login.php');
@@ -90,6 +122,13 @@ async function localOnly(context) {
     await page.getByRole('button',{name:/Sign in/}).click();
     await page.waitForURL('**/users/employees/workspace.php');
     check(await page.locator('main').isVisible(), 'Recovered employee account can use its workspace');
+    await page.getByRole('button',{name:'Dashboard tour'}).click();
+    const staffTour = page.locator('[data-dashboard-tour]');
+    await staffTour.getByRole('button',{name:'Next'}).click();
+    check(await staffTour.locator('[data-tour-step]:visible h3').innerText() === 'Your work', 'Staff tour explains assigned work');
+    check(await staffTour.getByRole('link',{name:'My tasks'}).getAttribute('href') === '/users/employees/workspace.php#tasks', 'Staff tour links to assigned tasks');
+    check(await staffTour.getByRole('link',{name:'My tasks'}).count() === 1 && await staffTour.getByRole('link',{name:'Settings'}).count() === 0, 'Staff tour only lists staff navigation');
+    await staffTour.getByRole('button',{name:'Close dashboard tour'}).click();
     for (const audience of ['business','talents','work']) {
       await page.setViewportSize({width:1280,height:900});
       await page.goto('http://127.0.0.1:8000/landing/' + audience + '/');

@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `project_reports` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id` INT NOT NULL,
+  `project_id` INT NULL DEFAULT NULL,
+  `task_id` INT NULL DEFAULT NULL,
+  `report_scope` ENUM('project','task') NOT NULL DEFAULT 'project',
+  `title` VARCHAR(180) NOT NULL,
+  `summary` TEXT NOT NULL,
+  `report_text` LONGTEXT NOT NULL,
+  `frequency` ENUM('daily','weekly','biweekly','monthly') NOT NULL DEFAULT 'weekly',
+  `status` ENUM('draft','submitted','overdue','approved') NOT NULL DEFAULT 'draft',
+  `assignee` VARCHAR(255) NOT NULL DEFAULT '',
+  `assignee_email` VARCHAR(255) NOT NULL DEFAULT '',
+  `created_by` INT NOT NULL DEFAULT 0,
+  `next_due_at` DATETIME NULL DEFAULT NULL,
+  `last_sent_at` DATETIME NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `project_reports_company_index` (`company_id`,`status`,`next_due_at`),
+  KEY `project_reports_project_index` (`company_id`,`project_id`,`task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

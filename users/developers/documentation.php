@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../app/view.php';
 $user = admin_user(database());
 suite_start('API documentation','integrations',$user);
 ?>
-<div class="page-heading"><div><span class="eyebrow">BUILD WITH YOUR WORKSPACE</span><h1>Workspace API guide.</h1><p>The record API used by this application, with its current capabilities and limits.</p></div><a class="button secondary" href="/users/admin/integrations.php">Back to integrations</a></div>
+<div class="page-heading"><div><h1>Workspace API guide</h1><p>The record API used by this application, with its current capabilities and limits.</p></div><a class="button secondary" href="/users/admin/integrations.php">Back to integrations</a></div>
 <div class="notice info">This is a same-origin browser-session API for verified business administrators and staff with explicitly assigned tool access. API keys, OAuth, third-party access, and payment endpoints are not available.</div>
 <section class="panel record-form"><h2>Authentication</h2><p>Sign in to your business workspace. Requests use its session cookie, and the server selects the company from that session. A submitted company ID never grants access to another workspace.</p><p>For POST requests, use the CSRF token from a form in the current session as <code>csrf_token</code>, or send it in an <code>X-CSRF-Token</code> header. Never put passwords or session tokens in a URL.</p>
 <h2>Read records</h2><p><code>GET /api/records.php?module=projects&amp;page=1</code></p><p>Responses contain <code>ok</code>, <code>data</code>, <code>page</code>, <code>per_page</code> (25), and <code>total</code>. Records belong to your workspace and are ordered by descending record ID.</p>

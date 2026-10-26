@@ -26,7 +26,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 suite_start('Settings','settings',$user);
 ?>
-<div class="page-heading"><div><span class="eyebrow">MAKE YOURSELF AT HOME</span><h1>Workspace settings</h1><p>The details your team uses across the suite.</p></div></div>
+<div class="page-heading"><div><h1>Workspace settings</h1><p>Business details and defaults used across the workspace.</p></div></div>
 <section class="panel"><div class="panel-body"><form method="post" class="form-stack record-form" data-submit><?= csrf_field() ?><input type="hidden" name="version" value="<?= e($version) ?>">
 <?php if ($errors): ?><div class="notice error" role="alert"><?= e(implode(' ',$errors)) ?></div><?php endif; ?>
 <div class="field"><label for="company-name">Business name</label><input id="company-name" name="company_name" value="<?= e($user['company_name']) ?>" maxlength="255" required></div>

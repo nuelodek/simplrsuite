@@ -41,7 +41,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 suite_start('Workspace help','help',$user);
 ?>
-<div class="page-heading"><div><span class="eyebrow">LET’S KEEP WORK MOVING</span><h1><?= $ticket ? e($ticket['subject']) : 'Workspace help' ?></h1><p><?= $owner ? 'Review requests from your team and keep the conversation in one place.' : 'Ask your workspace administrator for help. Only you and the administrator can read your request.' ?></p></div><?php if ($ticket): ?><a class="button secondary" href="/users/help.php">All requests</a><?php endif; ?></div>
+<div class="page-heading"><div><h1><?= $ticket ? e($ticket['subject']) : 'Workspace help' ?></h1><p><?= $owner ? 'Review requests from your team.' : 'Ask your workspace administrator for help. Only you and the administrator can read your request.' ?></p></div><?php if ($ticket): ?><a class="button secondary" href="/users/help.php">All requests</a><?php endif; ?></div>
 <?php if ($error): ?><div class="notice error" role="alert"><?= e($error) ?></div><?php endif; ?>
 <?php if ($ticket):
 $replyCount = (int)db_one($db,'SELECT COUNT(*) AS total FROM workspace_ticket_comments WHERE ticket_id = ? AND company_id = ?',[$id,$companyId])['total'];

@@ -92,10 +92,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if ($error !== '') http_response_code(422);
 }
 $copy = [
- 'login'=>['Your next chapter starts here.', 'Sign in to manage your professional profile.'],
- 'signup'=>['Make room for opportunity.', 'Create your talent account. Your profile stays private until you choose to list it.'],
+ 'login'=>['Talent profile sign in', 'Sign in to manage your professional profile.'],
+ 'signup'=>['Create a talent account', 'Your profile stays private until you choose to list it.'],
  'verify'=>[$token === '' ? 'Check your inbox.' : 'Confirm your email.', 'Verify your email before entering your talent workspace.'],
- 'reset'=>['Let’s get you back in.', 'Request a link to reset your talent account password.'],
+ 'reset'=>['Password recovery', 'Request a link to reset your talent account password.'],
  'newpassword'=>['Choose a new password.', 'Use a unique phrase of 12–72 characters.'],
 ];
 auth_start(...$copy[$mode]);

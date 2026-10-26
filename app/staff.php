@@ -59,7 +59,7 @@ function staff_login_page(string $role): void {
         }
         redirect('/users/employees/workspace.php');
     }
-    auth_start(ucfirst($role) . ' sign in.', 'Your people, your projects, and your next steps.');
+    auth_start(ucfirst($role) . ' sign in', 'Sign in to your workspace.');
     echo '<form method="post" class="form-stack" data-submit>' . csrf_field() . '<div class="field"><label for="email">Work email</label><input id="email" name="email" type="email" autocomplete="username" required maxlength="255"></div><div class="field"><label for="password">Password</label><div class="password-wrap"><input id="password" name="password" type="password" autocomplete="current-password" required><button type="button" data-password="password" aria-controls="password" aria-pressed="false">Show</button></div></div><div class="field"><label for="workspace">Workspace code (optional)</label><input id="workspace" name="workspace" inputmode="numeric" pattern="[0-9]+" maxlength="10"><small>Use the code in your invitation if you belong to more than one workspace.</small></div><button class="button" type="submit">Sign in ' . icon('arrow') . '</button></form><p class="form-after"><a class="text-link" href="/users/forgetpassword.php?role=' . e($role) . '">Forgot your password?</a> Need an account? Ask your administrator for an invitation.</p><div class="role-links"><a href="/users/admin/login.php">Business owner</a><a href="/users/' . ($role === 'manager' ? 'employees' : 'managers') . '/login.php">' . ($role === 'manager' ? 'Employee' : 'Manager') . ' sign in</a></div>';
     auth_end();
 }

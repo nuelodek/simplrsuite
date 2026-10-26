@@ -27,7 +27,7 @@ $access = array_column(db_rows($db,'SELECT tool_key,valid_until FROM billing_ent
 $orders = db_rows($db,'SELECT reference,amount_minor,currency,provider,state,created_at,provider_mode FROM billing_orders WHERE company_id = ? ORDER BY id DESC LIMIT 50',[$user['company_id']]);
 suite_start('Billing','billing',$user);
 ?>
-<div class="page-heading"><div><span class="eyebrow">TOOLS THAT GROW WITH YOU</span><h1>Workspace billing</h1><p>Choose the toolkits you need for 1–12 months. Pay in naira with Paystack or US dollars with Flutterwave.</p></div><span class="badge"><?= $mode === 'test' ? 'Test mode' : 'Live mode' ?></span></div>
+<div class="page-heading"><div><h1>Workspace billing</h1><p>Choose the toolkits you need for 1–12 months. Pay in naira with Paystack or US dollars with Flutterwave.</p></div><span class="badge"><?= $mode === 'test' ? 'Test mode' : 'Live mode' ?></span></div>
 <nav class="module-tabs" aria-label="Payment currency"><a href="?currency=NGN" <?= $currency === 'NGN' ? 'class="active" aria-current="page"' : '' ?>>NGN · Paystack</a><a href="?currency=USD" <?= $currency === 'USD' ? 'class="active" aria-current="page"' : '' ?>>USD · Flutterwave</a></nav>
 <?php if (!$ready): ?><div class="notice warning"><?= e($providerName) ?> checkout is not configured yet. No payment can be started here until the service connection is ready.</div><?php endif; ?>
 <?php if ($currency === 'USD' && $usdRate !== null): ?><p class="subtle">Dollar totals use our fixed price conversion: 1 NGN = <?= e($usdRate) ?> USD. The combined total is rounded to the nearest cent. This is not a live exchange-rate quote.</p><?php endif; ?>

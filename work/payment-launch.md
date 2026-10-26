@@ -37,6 +37,15 @@ purchase here, avoiding a duplicate charge for the same functionality.
 Subscriptions are prepaid for 1–12 months with manual renewal. Automatic recurring
 charges, refunds, disputes, banking and payroll disbursements are not implemented.
 
+The current local workspace does not have usable provider sandbox credentials.
+The legacy checkout only supplies a Paystack public test key, which cannot be used
+by this server-side hosted-checkout flow. A Paystack test secret was also found
+hardcoded in legacy source; treat it as exposed and do not reuse it. No Flutterwave
+v3 test secret or webhook hash was found. Neither provider has been enabled or
+charged. Issue fresh sandbox credentials and configure them only in the ignored
+local `.env.local` (or the deployment secret store); never paste them into chat,
+source files, or commit history.
+
 ## Deployment configuration
 
 Configure secrets on the host, never in JavaScript, source history or browser

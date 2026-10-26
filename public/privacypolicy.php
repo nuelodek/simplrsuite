@@ -1,39 +1,22 @@
 <?php
-require_once __DIR__ . '/../app/bootstrap.php';
+require_once __DIR__ . '/../app/view.php';
 $privacyEmail = config('PRIVACY_CONTACT_EMAIL');
 $privacyDate = config('PRIVACY_REVIEWED_ON');
 $privacyReady = config('PRIVACY_APPROVED','false') === 'true';
+page_head('Privacy Policy', ['description' => 'Learn how Simplr Suite collects, uses, and protects personal information.']);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - Simplr Business Suites</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            margin: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1, h2, h3 {
-            color: #333;
-            margin-top: 30px;
-        }
-        p {
-            margin: 15px 0;
-        }
-        .last-updated {
-            font-style: italic;
-            color: #666;
-        }
-    </style>
-</head>
-<body>
-    <h1>Privacy Policy</h1>
+<body class="landing">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="public-header public-container">
+        <?= brand() ?>
+        <nav class="public-nav" aria-label="Main navigation"><a href="/">Home</a></nav>
+    </header>
+    <main id="main" class="privacy-main public-container">
+        <div class="privacy-heading">
+            <h1>Privacy Policy</h1>
+            <p>How Simplr Suite handles personal information and the choices available to you.</p>
+        </div>
+        <article class="privacy-card">
     <?php if (!$privacyReady): ?><p role="status"><strong>Draft for review.</strong> Business contact details and the final data-handling notice must be confirmed before public launch.</p><?php endif; ?>
 
     <h2>Introduction</h2>
@@ -56,7 +39,7 @@ $privacyReady = config('PRIVACY_APPROVED','false') === 'true';
     </ul>
 
     <h3>Changes to the Privacy Policy and Your Duty to Inform Us of Changes</h3>
-    <p class="last-updated">This version was last updated on <?= preg_match('/^\d{4}-\d{2}-\d{2}$/D',$privacyDate) ? e($privacyDate) : 'a date still awaiting review' ?>.</p>
+    <p class="privacy-last-updated">This version was last updated on <?= preg_match('/^\d{4}-\d{2}-\d{2}$/D',$privacyDate) ? e($privacyDate) : 'a date still awaiting review' ?>.</p>
     <p>We keep our privacy policy under regular review and may update it from time to time to reflect changes in our business practices or legal requirements. We encourage you to check this page periodically to stay informed about our privacy practices. It is important that the personal data we hold about you is accurate and current. Please keep us informed if your personal data changes during your relationship with us.</p>
 
     <h2>The Data We Collect About You</h2>
@@ -72,8 +55,15 @@ $privacyReady = config('PRIVACY_APPROVED','false') === 'true';
     </ul>
 
     <h2>Talent Profiles and Job Applications</h2>
-    <p>Talent directory profiles start private. Listing a profile shares its professional details with verified business accounts, without the sign-in email. Applying for a job is a separate action: you review and confirm sharing a copy of your profile, contact email, application note and optional PDF resume with the employer. Later profile edits do not change the submitted copy.</p>
+    <p>Talent directory profiles start private. Listing a profile shares its name, industry and professional details with verified business accounts, without the sign-in email. Recruiters may save a listed profile to their company shortlist, invite the person to apply for a published role, or send a direct hire offer. Invitations and offers appear in the talent account, and an email notification may be sent to the account address. An offer can be declined; accepting it shares the current profile and contact email with that employer and stores a copy in its workspace.</p>
+    <p>Applying for a job is a separate action: you review and confirm sharing a copy of your profile, contact email, application note and optional PDF resume with the employer. Later profile edits do not change the submitted copy.</p>
     <p>Application records are available to the applicant and authorized reviewers in the employer’s workspace. Resume files require authentication and are downloaded as attachments. Withdrawing an application closes review and disables future employer downloads of that resume through Simplr. It does not erase the submitted record or copies previously downloaded. Record retention periods and the contact process for data requests still require business review before launch.</p>
-    
+        </article>
+    </main>
+    <footer class="public-footer public-container">
+        <?= brand() ?>
+        <span>© <?= date('Y') ?> Simplr Suite. Built for better work.</span>
+        <div class="footer-links"><a href="/">Home</a><a href="/users/admin/login.php">Sign in</a></div>
+    </footer>
 </body>
 </html>

@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../app/view.php';
-auth_start('Make room for better work.', 'Create your business workspace and bring everything together.');
+auth_start('Create a workspace', 'Set up your business workspace.');
 $old = $_SESSION['signup_old'] ?? []; unset($_SESSION['signup_old']);
 ?>
 <form class="form-stack" method="post" action="/users/admin/congrats.php" data-submit>

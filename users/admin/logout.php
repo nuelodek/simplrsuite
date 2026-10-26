@@ -8,6 +8,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     setcookie(session_name(), '', ['expires'=>time()-3600,'path'=>$params['path'],'secure'=>$params['secure'],'httponly'=>true,'samesite'=>'Lax']);
     redirect($loginPath);
 }
-auth_start('Ready to sign out?', 'You can return to your workspace whenever you’re ready.');
+auth_start('Sign out', 'Confirm that you want to sign out.');
 echo '<form method="post">' . csrf_field() . '<button class="button" type="submit">Sign out</button></form><p class="form-after"><a href="/users/admin/newdashboard.php">Back to workspace</a></p>';
 auth_end();

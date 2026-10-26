@@ -35,7 +35,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 $assigned = array_column($grants,'access_level','module_key');
 suite_start('Staff access','access',$user);
 ?>
-<div class="page-heading"><div><span class="eyebrow">THE RIGHT TOOLS FOR EACH PERSON</span><h1>Staff access</h1><p>Choose who can view and edit each part of your workspace.</p></div></div>
+<div class="page-heading"><div><h1>Staff access</h1><p>Choose who can view and edit each part of your workspace.</p></div></div>
 <nav class="module-tabs" aria-label="Staff roles"><a href="?role=employee" <?= $role === 'employee' ? 'class="active" aria-current="page"' : '' ?>>Employees</a><a href="?role=manager" <?= $role === 'manager' ? 'class="active" aria-current="page"' : '' ?>>Managers</a></nav>
 <section class="panel"><div class="panel-body"><form method="get" class="form-stack"><input type="hidden" name="role" value="<?= e($role) ?>"><div class="field"><label for="person">Choose <?= e($role) ?></label><select id="person" name="id" required><option value="">Select a person</option><?php foreach ($staffList as $candidate): ?><option value="<?= (int)$candidate['id'] ?>" <?= (int)$candidate['id'] === $staffId ? 'selected' : '' ?>><?= e($candidate['name'] . ' · ' . $candidate['email']) ?></option><?php endforeach; ?></select></div><div><button class="button secondary" type="submit">Review access</button></div></form><?php if (!$staffList): ?><p>Add a person to your <a class="text-link" href="/users/admin/workspace.php?module=<?= $role === 'employee' ? 'employees' : 'managers' ?>">staff directory</a> first.</p><?php endif; ?></div></section>
 <?php if ($person): ?>
