@@ -1,5 +1,75 @@
 # Simplr Suite overnight continuation
 
+## Daytime continuation — interview scheduling (26 October 2026)
+
+Added the next recruiting workflow to the canonical workspace: employers with
+application edit access can schedule timezone-aware interviews, candidates can
+accept or decline in My applications, and employers can cancel pending or
+accepted interviews. Interview times are stored in UTC and displayed in the
+selected timezone. Remote meeting links must use HTTPS; in-person interviews need
+a location. Updates appear in both accounts; interview email is not sent.
+
+- The user clarified the reference context: historical PHP source is
+  `C:/Program Files/Ampps/www/simplr24`, and the existing database to inspect is
+  `simplrco_dashboard` through local phpMyAdmin. Both remain read-only reference
+  sources. phpMyAdmin confirmed the legacy database has an `interviews` table
+  (`talent_id`, date/time, interviewer, attended, feedback, company_id), but it
+  is not linked to the new job applications. The new migration is deliberately
+  application-scoped rather than altering this legacy table.
+- The legacy schema has a `messages` table, but the old talent chat pages query
+  `talentchat`, which is absent from the selected database. The `messages` schema
+  lacks a company/thread scope, so the old chat is not safe to copy directly.
+- The user created the isolated `simplr_dev` database. The canonical schema and
+  all 17 migrations, including `017_application_interviews.sql`, are installed
+  there. The active local app connects on port 3306 as `simplrco_simplr`; the
+  account has broad MySQL privileges, so keep this use confined to local
+  development and use a database-scoped account in production. `simplrco_dashboard`
+  remains untouched.
+- Only schema metadata was inspected in phpMyAdmin; no legacy customer rows were
+  queried, modified, or imported. The historical project was read-only.
+- With the user-provided local DB credentials, verified `simplrco_dashboard` on
+  port 3306 in a read-only session and inventoried its 60 tables/columns. This is
+  the historical reference database, not the app's isolated `simplr_dev` test
+  database. Never point the canonical app or migrations at it.
+- At the user's request, the supplied MySQL account is used for the active local
+  `DB_*` connection to `simplr_dev`; the same host/account values are also kept
+  under `LEGACY_DB_*` for reference. Both are in ignored `.env.local`; the
+  application uses only `DB_*`. Never set `DB_DATABASE=simplrco_dashboard` or run
+  migrations against that historical customer database.
+- The live legacy DB schema differs from the checked-in historical SQL schema:
+  the live DB has no `tasks`, `talentprofile`, `talents`, or `talentchat`, although
+  some appear in the historical SQL files. The canonical app expects `tasks` and
+  has separate new talent and recruiting tables, so schema-file presence alone
+  does not establish that those data/table structures exist in the live DB.
+- Existing canonical workspace modules map to legacy tables for projects,
+  employees, managers, departments, CRM, finance, inventory, assets, events,
+  applications, and part of security. Legacy-only areas include attendance,
+  benefits, bank account details, budgeting, cash flow, messages, AI/reporting,
+  and several cyber tracking registers. A metadata table is not proof that the
+  feature had a working UI or safe workflow; source search found no attendance
+  or benefits entry/update flow to port directly.
+- The live `interviews` table has no job-application key; new interviews remain
+  scoped to the modern `application_submissions` journey. Legacy `messages`
+  stores sender/recipient/message but no tenant or conversation scope, and the
+  old chat page expects a separate, absent `talentchat` table. Do not expose that
+  message history through the new app without a deliberate identity/consent and
+  tenant-mapping design. Legacy `bankaccount` stores account numbers and needs
+  explicit protection and migration approval before any data migration.
+- Legacy `toolkit_subscriptions` uses one wide row with per-tool month/date
+  columns; it does not map directly to the canonical order and provider-scoped
+  entitlement model. Do not bulk-copy or grant paid access from it without a
+  reviewed entitlement reconciliation.
+- Scheduling and responses use CSRF, application/interview version checks,
+  account/company scope, workspace edit grants, rate limits and audit events.
+- Database-independent interview policy/render checks passed **10/10**; the
+  database-backed recruiting policy suite passed **14/14**. Recruiting HTTP
+  journey passed **125/125**; access regression passed **217/217**. The
+  consolidation/core/talent regression scripts passed **197/197**, **267/267**,
+  and **387/387**. Consolidation browser checks passed **42/42** and recruiting
+  browser checks **35/35**. Changed PHP files lint; the Python HTTP test script
+  compiles. Local `/health.php` returns 200. No production database or server
+  was used.
+
 User request: inspect and improve the whole application overnight so it becomes
 presentable and suitable for launch. User explicitly chose **all modules equally**.
 No user authorization for subagents, deployment, external messages, or real
@@ -428,18 +498,22 @@ is staged and it is now ignored. Never print its values. Do not reset these chan
 - PHP on `127.0.0.1:8000`, process launched hidden with working directory repo and
   `php -S 127.0.0.1:8000 -t . router.php`. Logs `.local/php-*.log`. Log request URLs
   contain test tokens; don't print raw logs without redacting token query values.
-- Dedicated MySQL process on loopback `127.0.0.1:3307`, binary
-  `C:/tools/mysql/mysql-8.4.5-winx64/bin/mysqld.exe`, datadir `.local/mysql`.
-  Generated root password in ignored `.env.local`, APP_ENV local, MAIL_TRANSPORT
-  log, DB_DATABASE **simplr_dev**. Do NOT print credentials. This process is NOT
-  an existing live database. Initial partial install DB simplr_local is unused.
+- Existing local MySQL/phpMyAdmin server on loopback port 3306. The user created
+  empty `simplr_dev`, then the canonical installer populated it with the base
+  schema and all 17 migrations. Active local settings are in ignored `.env.local`
+  with `APP_ENV=local`, `MAIL_TRANSPORT=log`, and `DB_DATABASE=simplr_dev`.
+  Do NOT print credentials. The same MySQL account has broad privileges; never
+  use it for production deployment. `simplrco_dashboard` remains a read-only
+  historical reference and was not used by migrations or tests.
 - MySQL launch had local credential reset via `.local/reset-root.sql` (private);
   the current process used `--init-file` for that reset. Don't change other MySQL
   instances or restart with another application's data dir.
 - Mail test outbox `storage/mail/*.json`; test fixtures and auth secrets ignored.
 - Smoke tests create synthetic companies, emails at example.test, and records;
   retain them for review. Rate limits are real: repeated rapid runs can reach
-  signup/IP limits, so wait the 15-minute window instead of weakening app limits.
+  signup/IP limits. For completed local browser checks, only rate-limit windows
+  tied to loopback and synthetic fixture logins were expired; application limits
+  were not weakened.
 - Latest successful test browser credentials are `.local/browser-fixture.json`
   (synthetic only). Browser tab id 1 in IAB/browser 2 is signed into an earlier
   synthetic workspace. If session persists, reuse. Viewport was 390x844; reset

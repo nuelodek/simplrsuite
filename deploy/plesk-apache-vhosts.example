@@ -1,0 +1,82 @@
+﻿# Apache vhost example for a multi-domain production deployment.
+# Use these as a starting point in Plesk or Apache. Replace the document root and
+# certificate paths with the values used on your host. This is configuration only;
+# it does not deploy or run the site.
+
+<VirtualHost *:80>
+    ServerName vigorous-swartz.161-97-144-85.plesk.page
+    ServerAlias www.vigorous-swartz.161-97-144-85.plesk.page
+    Redirect permanent / https://vigorous-swartz.161-97-144-85.plesk.page/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName vigorous-swartz.161-97-144-85.plesk.page
+    ServerAlias www.vigorous-swartz.161-97-144-85.plesk.page
+    DocumentRoot "/var/www/vhosts/your-domain/httpdocs"
+    SSLEngine on
+    SSLCertificateFile "/var/www/vhosts/your-domain/conf/certs/ssl-cert-snakeoil.pem"
+    SSLCertificateKeyFile "/var/www/vhosts/your-domain/conf/certs/ssl-cert-snakeoil.key"
+
+    <Directory "/var/www/vhosts/your-domain/httpdocs">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName business.simplr.com
+    Redirect permanent / https://business.simplr.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName business.simplr.com
+    DocumentRoot "/var/www/vhosts/your-domain/httpdocs"
+    SSLEngine on
+    SSLCertificateFile "/var/www/vhosts/your-domain/conf/certs/business.simplr.com.crt"
+    SSLCertificateKeyFile "/var/www/vhosts/your-domain/conf/certs/business.simplr.com.key"
+
+    <Directory "/var/www/vhosts/your-domain/httpdocs">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName talents.simplr.com
+    Redirect permanent / https://talents.simplr.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName talents.simplr.com
+    DocumentRoot "/var/www/vhosts/your-domain/httpdocs"
+    SSLEngine on
+    SSLCertificateFile "/var/www/vhosts/your-domain/conf/certs/talents.simplr.com.crt"
+    SSLCertificateKeyFile "/var/www/vhosts/your-domain/conf/certs/talents.simplr.com.key"
+
+    <Directory "/var/www/vhosts/your-domain/httpdocs">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName work.simplr.com
+    Redirect permanent / https://work.simplr.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName work.simplr.com
+    DocumentRoot "/var/www/vhosts/your-domain/httpdocs"
+    SSLEngine on
+    SSLCertificateFile "/var/www/vhosts/your-domain/conf/certs/work.simplr.com.crt"
+    SSLCertificateKeyFile "/var/www/vhosts/your-domain/conf/certs/work.simplr.com.key"
+
+    <Directory "/var/www/vhosts/your-domain/httpdocs">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>

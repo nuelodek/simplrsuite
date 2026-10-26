@@ -24,6 +24,18 @@ These origins also route account-email links to the correct audience. When unset
 account mail keeps using `APP_URL`. Cookies remain host-only. DNS, certificates,
 and live hosting have not been changed or verified.
 
+For a multi-domain Plesk deployment, [deploy/plesk-production.env.example](./deploy/plesk-production.env.example)
+is a secret-free starting template for the configured production origins:
+`APP_URL=https://vigorous-swartz.161-97-144-85.plesk.page`,
+`APP_BUSINESS_URL=https://business.simplr.com`,
+`APP_TALENT_URL=https://talents.simplr.com`, and
+`APP_WORK_URL=https://work.simplr.com`.
+Configure the values in Plesk or copy the template to a private server-side
+`.env.local`; replace every `SET_IN_PLESK` placeholder and provide real secrets
+only through the server's private configuration. Do not commit `.env.local`. The
+template keeps payment providers disabled and does not deploy the app or verify
+the host.
+
 ## Local setup
 
 Requirements: PHP 8.2+ with `mysqli`, `mysqlnd`, `mbstring`, `openssl`, `curl`,
@@ -36,6 +48,9 @@ database. No JavaScript build step is needed.
 2. Copy `.env.example` to `.env.local` and set `DB_HOST`, `DB_PORT`,
    `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD`. Host environment variables
    override file configuration. `.env.local` overrides `.env`.
+   Any `LEGACY_DB_*` values in `.env.local` are reference-only; the application
+   and migration runner use `DB_*` and must remain pointed at the isolated
+   development database.
 3. For local testing, use `APP_ENV=local`, `APP_URL=http://127.0.0.1:8000`, and
    `MAIL_TRANSPORT=log`. Test emails are written to `storage/mail/`, which the
    development router and Apache rules prevent from being served.
@@ -85,8 +100,11 @@ serving the repository directly without its deny rules can expose private files.
   sign-in emails are not included. Employers can publish jobs, receive applications,
   and update review stages. Candidates explicitly share a profile snapshot and
   contact email, optionally upload a private PDF resume, track stages, and withdraw.
-  Withdrawal closes review and revokes employer resume downloads; submitted
-  records and previously downloaded copies remain. Direct messaging is unavailable.
+  Employers can schedule timezone-aware interviews; candidates can accept or
+  decline, and employers can cancel scheduled interviews. These updates appear in
+  both accounts; the app does not send interview emails. Withdrawal closes review
+  and revokes employer resume downloads; submitted records and previously
+  downloaded copies remain. Direct messaging is unavailable.
   Historical talent records are preserved and
   are not automatically published or imported into the new profile editor.
 - Internal record API at `/api/records.php?module=projects` (and other allowlisted

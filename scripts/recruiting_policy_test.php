@@ -23,6 +23,10 @@ try {
  recruiting_check(isset($errors['closing_date']),'Malformed deadline returns validation error');
  [$values,$errors]=validate_record($db,-2147483648,module_config('jobs'),[...$fields,'timezone'=>'invalid']);
  recruiting_check(isset($errors['timezone']),'Malformed timezone returns validation error');
+ recruiting_check(interview_datetime_utc('2099-05-12T14:30','Africa/Lagos')==='2099-05-12 13:30:00','Interview local time converts to UTC');
+ recruiting_check(interview_datetime_utc('2000-01-01T10:00','Africa/Lagos')===null,'Past interview time is rejected');
+ recruiting_check(interview_datetime_utc('2099-02-30T14:30','Africa/Lagos')===null,'Invalid interview calendar date is rejected');
+ recruiting_check(interview_datetime_utc('2099-05-12T14:30','Not/AZone')===null,'Unknown interview timezone is rejected');
 } finally {
  putenv($before===false?'BILLING_ENFORCE':'BILLING_ENFORCE='.$before);
  $passed=count(array_filter($checks,fn($x)=>$x['passed']));

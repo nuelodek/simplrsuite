@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS application_interviews (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  application_id INT NOT NULL,
+  company_id INT NOT NULL,
+  account_id INT NOT NULL,
+  title VARCHAR(150) NOT NULL,
+  scheduled_at DATETIME NOT NULL,
+  timezone VARCHAR(64) NOT NULL,
+  meeting_type VARCHAR(20) NOT NULL,
+  meeting_location VARCHAR(255) NOT NULL DEFAULT '',
+  meeting_url VARCHAR(2048) NOT NULL DEFAULT '',
+  agenda TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_by INT NOT NULL,
+  responded_at DATETIME DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY application_interviews (application_id, id),
+  KEY candidate_interviews (account_id, status, scheduled_at),
+  KEY company_interviews (company_id, status, scheduled_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -5,7 +5,22 @@ $id = filter_var($_GET['id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range
 $item = $id ? application_submission($db,$id,(int)$user['id'],true) : null;
 if (isset($_GET['id']) && !$item) fail('This application could not be found in your account.',404);
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    require_post(); rate_limit($db,'application-withdraw',(string)$user['id'],30);
+    require_post();
+    if (input('action') === 'interview_response') {
+        if (!$item || !in_array(input('response'),['accepted','declined'],true)) fail('Choose a valid response to this interview.',422);
+        rate_limit($db,'interview-response',(string)$user['id'],30);
+        $db->begin_transaction();
+        try {
+            $current = application_submission($db,$id,(int)$user['id'],true,true);
+            if (!$current || !hash_equals(record_version($current),input('version'))) { $db->rollback(); fail('This application changed. Reload and review its latest details.',409); }
+            if ($current['withdrawn_at']) { $db->rollback(); fail('You withdrew this application. Further interview responses are closed.',409); }
+            update_application_interview($db,$current,(int)input('interview_id'),input('response'),input('interview_version'));
+            $db->commit();
+        } catch (Throwable $error) { $db->rollback(); throw $error; }
+        flash(input('response') === 'accepted' ? 'Interview accepted. The employer can see your response in Simplr.' : 'Interview declined. The employer can see your response in Simplr.');
+        redirect('/users/talents/applications.php?id='.$id);
+    }
+    rate_limit($db,'application-withdraw',(string)$user['id'],30);
     if (!$item || input('action') !== 'withdraw' || input('confirm') !== '1') fail('Confirm the application you want to withdraw.',422);
     $db->begin_transaction();
     try {
@@ -20,6 +35,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } catch (Throwable $error) { $db->rollback(); throw $error; }
     flash('Application withdrawn. The employer can no longer download your resume through Simplr.'); redirect('/users/talents/applications.php?id='.$id);
 }
+$interviews = $item ? application_interviews($db,(int)$id) : [];
 $page = max(1,min(10000,(int)($_GET['page'] ?? 1))); $offset = ($page-1)*20;
 if (!$item) {
     $total = (int)db_one($db,'SELECT COUNT(*) AS total FROM application_submissions WHERE account_id = ?',[$user['id']])['total'];
@@ -31,6 +47,7 @@ suite_start('My applications','applications',['company_name'=>$user['full_name']
 <?php if ($item): ?>
 <p><a class="text-link" href="/users/talents/applications.php">← All my applications</a></p>
 <section class="panel"><div class="panel-head"><h2>Application status</h2><span class="badge"><?= $item['withdrawn_at'] ? 'Withdrawn' : e(ucfirst($item['status'])) ?></span></div><div class="panel-body"><p>Submitted <?= e($item['consented_at']) ?> UTC. Status is updated by the employer in Simplr.</p><?php if ($item['withdrawn_at']): ?><div class="notice info">You withdrew this application on <?= e($item['withdrawn_at']) ?> UTC. You cannot reapply to this role. The employer retains your submitted record and any copies previously downloaded.</div><?php endif; ?></div></section>
+<?php application_interviews_view($interviews,true,record_version($item),!$item['withdrawn_at']); ?>
 <section class="panel"><div class="panel-head"><h2>Your submitted profile</h2></div><div class="panel-body"><p class="subtle">This is the copy shared when you applied. Later changes to your profile do not change this record.</p><?php submitted_profile_view($item); ?><?php if ($item['resume_attachment_id']): ?><p><a class="button secondary" href="/api/attachments.php?id=<?= (int)$item['resume_attachment_id'] ?>">Download my submitted resume</a></p><?php endif; ?></div></section>
 <?php if (!$item['withdrawn_at']): ?><section class="panel record-form"><h2>Withdraw application</h2><p>Withdrawal stops review and future resume downloads by the employer. It does not erase your submitted record or copies already downloaded. You cannot apply again to this role.</p><form method="post" class="form-stack" data-submit><?= csrf_field() ?><input type="hidden" name="action" value="withdraw"><input type="hidden" name="version" value="<?= e(record_version($item)) ?>"><label class="check-label"><input type="checkbox" name="confirm" value="1" required> I want to withdraw this application.</label><div><button class="button secondary" type="submit">Withdraw application</button></div></form></section><?php endif; ?>
 <?php elseif (!$items): ?><section class="panel empty-state"><?= icon('briefcase') ?><h2>Your applications will appear here.</h2><p>Find a role that suits your skills and apply with your talent profile.</p><a class="button" href="/jobs/">Explore open roles</a></section>

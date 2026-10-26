@@ -38,7 +38,7 @@ def job_row(admin,id):
 try:
     source=r"""<?php
 require 'app/database.php';
-if(config('APP_ENV')!=='local'||config('MAIL_TRANSPORT')!=='log'||config('DB_DATABASE')!=='simplr_dev'||config('DB_HOST')!=='127.0.0.1'||config('DB_PORT')!=='3307')exit(2);
+if(config('APP_ENV')!=='local'||config('MAIL_TRANSPORT')!=='log'||config('DB_DATABASE')!=='simplr_dev'||config('DB_HOST')!=='127.0.0.1'||config('DB_PORT')!=='3306')exit(2);
 $db=database();$out=[];
 for($i=0;$i<2;$i++){
  $tag=bin2hex(random_bytes(8));$email='recruiting-'.$tag.'@example.test';$pass='Synthetic-recruiting-'.$tag.'!';
@@ -112,6 +112,28 @@ echo json_encode($out);
     code,body,_=admin.request(review,stage,False);expect(code==200 and 'Application stage updated.' in body,'Employer changes application stage')
     expect(admin.request(review,stage)[0]==409,'Stale stage update rejected')
     expect('Interview' in talent.request(detail,api=False)[1],'Candidate sees employer stage update')
+    csrf,body=admin.form(review)
+    interview={'csrf_token':csrf,'action':'interview_schedule','version':hidden(body,'version'),'interview_title':'Portfolio discussion','interview_datetime':'2099-05-12T14:30','interview_timezone':'Africa/Lagos','meeting_type':'remote','meeting_url':'https://meet.example.test/room','meeting_location':'','interview_agenda':'Discuss the candidate portfolio.'}
+    expect(admin.request(review,{**interview,'csrf_token':'bad'})[0]==419,'Interview scheduling requires CSRF')
+    expect(admin.request(review,{**interview,'meeting_url':'http://meet.example.test/room'})[0]==422,'Remote interview requires HTTPS')
+    expect(admin.request(review,{**interview,'interview_datetime':'2000-01-01T10:00'})[0]==422,'Past interview time is rejected')
+    expect(employee.request(review,{**interview,'csrf_token':staff_token},False)[0]==403,'Application viewer cannot schedule an interview')
+    code,body,_=admin.request(review,interview,False);expect(code==200 and 'Interview scheduled.' in body,'Employer schedules a remote interview')
+    code,body,_=talent.request(detail,api=False)
+    expect(code==200 and 'Portfolio discussion' in body and 'Tue, 12 May 2099 at 14:30 WAT' in body and 'https://meet.example.test/room' in body,'Candidate sees interview in its selected timezone')
+    interview_id=int(re.search(r'name="interview_id" value="(\d+)"',body).group(1))
+    interview_version=re.search(r'name="interview_version" value="([^"]+)"',body).group(1)
+    response={'csrf_token':hidden(body,'csrf_token'),'version':hidden(body,'version'),'action':'interview_response','interview_id':str(interview_id),'interview_version':interview_version,'response':'accepted'}
+    expect(talent.request(detail,{**response,'csrf_token':'bad'})[0]==419,'Interview response requires CSRF')
+    expect(talent.request(detail,{**response,'interview_version':'stale'})[0]==409,'Stale interview response is rejected')
+    code,body,_=talent.request(detail,response,False);expect(code==200 and 'Interview accepted.' in body,'Candidate accepts interview')
+    expect(talent.request(detail,response)[0]==409,'Interview cannot be answered twice')
+    _,body=admin.form(review)
+    expect('Accepted' in body,'Employer sees candidate interview response')
+    interview_cancel={'csrf_token':hidden(body,'csrf_token'),'version':hidden(body,'version'),'action':'interview_cancel','interview_id':str(interview_id),'interview_version':re.search(r'name="interview_version" value="([^"]+)"',body).group(1)}
+    expect(admin.request(review,{**interview_cancel,'interview_version':'stale'})[0]==409,'Stale interview cancellation is rejected')
+    code,body,_=admin.request(review,interview_cancel,False);expect(code==200 and 'Interview cancelled.' in body,'Employer cancels an accepted interview')
+    expect('Cancelled' in talent.request(detail,api=False)[1],'Candidate sees interview cancellation')
     expect(talent.request(detail,stale_withdraw)[0]==409,'Withdrawal requires current application version')
     expect(admin.request('/api/attachments.php',{'csrf_token':review_csrf,'action':'remove','module':'applications','record_id':application_id,'id':file_id})[0]==409,'Employer cannot remove candidate submitted resume')
     overwrite={'csrf_token':review_csrf,'action':'update','id':application_id,'version':'anything','applicant_name':'Changed','email':'changed@example.test','position_applied_for':'Changed','status':'hired'}
