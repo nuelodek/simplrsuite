@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS business_objectives (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  company_id INT UNSIGNED NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  target_date DATE NOT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'planned',
+  measure VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX objectives_company (company_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

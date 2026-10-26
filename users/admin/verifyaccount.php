@@ -1,84 +1,36 @@
-  <?php
-  session_start();
-  require_once '../../sql_queries/db.php';
-  require_once '../../vendor/autoload.php';
-  require_once '../../users/admin/sentryinitialize.php';
-
-
-
-  
-  if (!isset($_SESSION['email'])) {
-      header('Location: login.php');
-      exit();
-  }
-
-  // Generate verification token
-  function generateToken($length = 32) {
-      return bin2hex(random_bytes($length));
-  }
-
-  $email = $_SESSION['email'];
-  $token = generateToken();
-
-  // Update user with verification token
-  $stmt = $conn->prepare("UPDATE users SET token = ?, is_active = 0 WHERE email = ?");
-  $stmt->bind_param("ss", $token, $email);
-
-  if ($stmt->execute()) {
-      // Initialize Sentry
-      $initializer = new SentryInitializer();
-      $initializer->initialize();
-    
-      // Send verification email
-      $to = $email;
-      $subject = "Verify Your Account";
-      $verification_link = "https://yourdomain.com/verify.php?token=" . $token;
-    
-      $message = "
-      <html>
-      <head>
-          <title>Account Verification</title>
-      </head>
-      <body>
-          <h2>Welcome to Our Platform</h2>
-          <p>Please click the link below to verify your account:</p>
-          <a href='{$verification_link}'>{$verification_link}</a>
-          <p>If you didn't create this account, please ignore this email.</p>
-      </body>
-      </html>
-      ";
-    
-      $headers = "MIME-Version: 1.0" . "\r\n";
-      $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-      $headers .= 'From: noreply@yourdomain.com' . "\r\n";
-    
-      if(mail($to, $subject, $message, $headers)) {
-          echo '<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f0f0f0;">
-              <img src="email-sent.png" alt="Email Sent" style="width: 64px; height: 64px;">
-              <p style="font-size: 18px; color: #4CAF50; margin-top: 10px;">Verification email has been sent. Please check your inbox!</p>
-          </div>';
-          echo '<script>
-              setTimeout(function() {
-                  window.location.href = "login.php";
-              }, 3000);
-          </script>';
-      } else {
-          \Sentry\captureMessage('Failed to send verification email to ' . $email);
-          echo '<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #ffebee;">
-              <p style="font-size: 18px; color: #f44336; margin: 0;">Error sending verification email. Please try again.</p>
-              <form method="POST" style="margin-top: 20px;">
-                  <input type="hidden" name="resend_email" value="1">
-                  <button type="submit" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Resend Verification Email</button>
-              </form>
-          </div>';
-      }
-  } else {
-      \Sentry\captureException(new Exception($stmt->error));
-      echo '<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #ffebee;">
-          <p style="font-size: 18px; color: #f44336; margin: 0;">Error: ' . $stmt->error . '</p>
-      </div>';
-  }
-
-  $stmt->close();
-  $conn->close();
-  ?>
+<?php
+require_once __DIR__ . '/../../app/auth.php';
+require_once __DIR__ . '/../../app/mail.php';
+require_once __DIR__ . '/../../app/view.php';
+$token = is_string($_GET['token'] ?? null) ? $_GET['token'] : '';
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    require_post(); $db = database(); rate_limit($db, 'verification', '', 15);
+    if ($token !== '') {
+        if (!preg_match('/^[a-f0-9]{64}$/D', $token)) { flash('This verification link is invalid. Request a new one.', 'error'); redirect('/users/admin/verifyaccount.php'); }
+        $db->begin_transaction();
+        $record = db_one($db, "SELECT * FROM auth_tokens WHERE token_hash = ? AND purpose = 'verify' AND used_at IS NULL AND expires_at > UTC_TIMESTAMP() FOR UPDATE", [hash('sha256',$token)]);
+        if ($record) {
+            db_run($db, "UPDATE users SET status = 'Verified' WHERE id = ? AND status = 'Unverified'", [$record['user_id']]);
+            db_run($db, "UPDATE auth_tokens SET used_at = UTC_TIMESTAMP() WHERE user_id = ? AND purpose = 'verify' AND used_at IS NULL", [$record['user_id']]);
+            $db->commit(); unset($_SESSION['verification_user_id']);
+            flash('Email verified. Your workspace is ready — sign in to continue.'); redirect('/users/admin/login.php');
+        }
+        $db->rollback(); flash('This verification link has expired or has already been used. Sign in to request another.', 'error'); redirect('/users/admin/login.php');
+    }
+    if (empty($_SESSION['verification_user_id'])) redirect('/users/admin/login.php');
+    $user = db_one($db, "SELECT id, email FROM users WHERE id = ? AND status = 'Unverified'", [$_SESSION['verification_user_id']]);
+    if (!$user) redirect('/users/admin/login.php');
+    rate_limit($db, 'resend', (string)$user['id'], 3);
+    if (!mail_ready()) { flash('Email delivery is temporarily unavailable. Please try again later.', 'error'); redirect('/users/admin/verifyaccount.php'); }
+    $newToken = issue_token($db, (int)$user['id'], 'verify');
+    $sent = send_account_mail($user['email'], 'Verify your Simplr workspace', "Verify your email within one hour:\n" . account_link('/users/admin/verifyaccount.php',$newToken));
+    flash($sent ? 'A new verification link is on its way. Check your inbox and spam folder.' : 'We could not send the email. Please try again later.', $sent ? 'success' : 'error');
+    redirect('/users/admin/verifyaccount.php');
+}
+auth_start($token !== '' ? 'Confirm your email.' : 'Check your inbox.', $token !== '' ? 'Finish verifying your email to activate your workspace.' : 'Open the verification email to get your workspace ready.');
+?>
+<?php if ($token !== '' || isset($_SESSION['verification_user_id'])): ?>
+<form method="post" class="form-stack" data-submit><?= csrf_field() ?><button class="button" type="submit"><?= $token !== '' ? 'Verify email address' : 'Resend verification email' ?></button></form>
+<?php else: ?><p class="subtle">Sign in to request a new verification link.</p><?php endif; ?>
+<p class="form-after"><a class="text-link" href="/users/admin/login.php">Back to sign in</a></p>
+<?php auth_end(); ?>

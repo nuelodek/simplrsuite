@@ -1,202 +1,23 @@
 <?php
-session_start();
-include '../../sql_queries/db.php'; // Ensure this file contains your DB connection logic
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $token = $_GET['token'];
-    $new_password = $_POST['new_password'];
-    $confirm_password = $_POST['confirm_password'];
-
-    if ($new_password !== $confirm_password) {
-        echo "Passwords do not match.";
-        exit();
-    }
-
-    // Hash the new password
-    $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-
-    // Verify the token and update the password
-    $stmt = $conn->prepare("SELECT email FROM password_resets WHERE token = ?");
-    $stmt->bind_param("s", $token);
-    $stmt->execute();
-    $stmt->store_result();
-
-    if ($stmt->num_rows > 0) {
-        $stmt->bind_result($identifier);
-        $stmt->fetch();
-        $stmt->close();
-
-        // Function to update password in a given table
-        function updatePassword($conn, $table, $identifier, $hashed_password) {
-            $stmt = $conn->prepare("UPDATE $table SET password = ? WHERE email = ?");
-            $stmt->bind_param("ss", $hashed_password, $identifier);
-            $stmt->execute();
-            $affected_rows = $stmt->affected_rows;
-            $stmt->close();
-            return $affected_rows;
-        }
-
-        // Check each table and update the password if a match is found
-        $tables = ['manager_auth', 'employees_auth', 'users'];
-        $password_updated = false;
-
-        foreach ($tables as $table) {
-            if (updatePassword($conn, $table, $identifier, $hashed_password) > 0) {
-                $password_updated = true;
-                break;
-            }
-        }
-
-        // Check if the password was successfully updated
-        if ($password_updated) {
-            // Remove the token from password_resets table
-            $stmt = $conn->prepare("DELETE FROM password_resets WHERE token = ?");
-            $stmt->bind_param("s", $token);
-            $stmt->execute();
-            $stmt->close();
-
-            echo "Password has been reset successfully.";
-        } else {
-            echo "Error updating password.";
-        }
-    } else {
-        echo "Invalid token.";
-    }
+require_once __DIR__ . '/../../app/auth.php';
+require_once __DIR__ . '/../../app/view.php';
+$token = is_string($_GET['token'] ?? null) ? $_GET['token'] : '';
+if (!preg_match('/^[a-f0-9]{64}$/D', $token)) { flash('Request a new password reset link to continue.','error'); redirect('/users/admin/resetpassword.php'); }
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    require_post(); $db = database(); rate_limit($db,'reset-confirm','',20);
+    $password = is_string($_POST['new_password'] ?? null) ? $_POST['new_password'] : '';
+    $confirm = is_string($_POST['confirm_password'] ?? null) ? $_POST['confirm_password'] : '';
+    if ($error = password_error($password,$confirm)) { flash($error,'error'); redirect('/users/admin/forgetpassword.php?token=' . rawurlencode($token)); }
+    $db->begin_transaction();
+    $record = db_one($db,"SELECT * FROM auth_tokens WHERE token_hash = ? AND purpose = 'reset' AND used_at IS NULL AND expires_at > UTC_TIMESTAMP() FOR UPDATE",[hash('sha256',$token)]);
+    if (!$record) { $db->rollback(); flash('This reset link has expired or has already been used. Request a new one.','error'); redirect('/users/admin/resetpassword.php'); }
+    db_run($db, "UPDATE users SET password = ? WHERE id = ? AND status IN ('Verified','Unverified')",[password_hash($password,PASSWORD_DEFAULT),$record['user_id']]);
+    db_run($db,"UPDATE auth_tokens SET used_at = UTC_TIMESTAMP() WHERE user_id = ? AND purpose = 'reset' AND used_at IS NULL",[$record['user_id']]);
+    $db->commit();
+    session_regenerate_id(true); $_SESSION = [];
+    flash('Password updated. Sign in with your new password.'); redirect('/users/admin/login.php');
 }
+auth_start('Choose a new password.', 'Use a memorable phrase that you don’t use elsewhere.');
 ?>
-
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <title>Sign Up / Login</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
-    <title>Reset Password</title>
-
-    <style>
-      
-   body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: white;
-            font-family: sans-serif;
-            display: flex;
-            box-sizing: border-box;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        
-         .container {
-            background-color: white;
-            width: 500px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-
-
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-
-        label {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        input {
-            padding: 10px 10px; 
-            border-radius: 5px;
-            /*border: none;*/
-            margin-bottom: 10px;
-        }
-
-        .word {
-            font-size: 30px;
-            margin-bottom: 0px;
-        }
-
-        input[type="submit"]:hover {
-            background-color: black;
-            color: white;
-        }
-
-        p {
-            line-height: 1.0;
-        }
-    </style>
-
- </head>
-
-
-   <body>
-
-<div class="container">
-
-    <h2 id="formDescription">Reset your password</h2>
-
-
-<form method="POST" action="forgetpassword.php">
-                   
-                    <label>Type your new password*</label>
-                    <input type="password" name="new_password" placeholder="New Password" required>
-                    
-                    
-                                        <label>Confirm Password</label>
-
-                    <input type="password" name="confirm_password" placeholder="Confirm Password" required>
-                    <div class="social-login">
-
-                        <input type="submit" value="Reset Password"> 
-
-                    </div>
-                    </form>
-        
- </div>
- <script>
-        function validateForm() {
-            var fullName = document.getElementById('full').value;
-            var identifier = document.getElementById('identifier').value;
-            var password = document.getElementById('password').value;
-            var agree = document.getElementById('agree').checked;
-
-            if (fullName === "" || identifier === "" || password === "") {
-                alert("All fields are required.");
-                return false;
-            }
-            if (!agree) {
-                alert("You must agree to the terms and conditions.");
-                return false;
-            }
-            return true;
-        }
-
-        function validateLoginForm() {
-            var identifier = document.getElementById('login-identifier').value;
-            var password = document.getElementById('login-password').value;
-
-            if (identifier === "" || password === "") {
-                alert("All fields are required.");
-                return false;
-            }
-            return true;
-        }
-
-        function validateForgotPasswordForm() {
-            var identifier = document.getElementById('forgot-identifier').value;
-
-            if (identifier === "") {
-                alert("Identifier is required.");
-                return false;
-            }
-            return true;
-        }
-    </script>
-
-</body>
-</html>
+<form class="form-stack" method="post" data-submit><?= csrf_field() ?><div class="field"><label for="password">New password</label><div class="password-wrap"><input id="password" name="new_password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required><button type="button" data-password="password" aria-controls="password" aria-pressed="false">Show</button></div><small>Use 12–72 characters.</small></div><div class="field"><label for="confirm_password">Confirm password</label><input id="confirm_password" name="confirm_password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></div><button class="button" type="submit">Save new password</button></form>
+<?php auth_end(); ?>

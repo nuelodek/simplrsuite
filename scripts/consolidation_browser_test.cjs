@@ -1,0 +1,122 @@
+/* Local browser regression for the component consolidated from simplr24. */
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { chromium } = require('playwright');
+const root = path.resolve(__dirname, '..');
+const evidence = path.join(root, 'work/test-results');
+const results = [];
+function check(value, name) { results.push({name, passed: !!value}); assert.ok(value, name); }
+async function localOnly(context) {
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    return url.hostname === '127.0.0.1' ? route.continue() : route.abort();
+  });
+}
+(async () => {
+  const config = fs.readFileSync(path.join(root,'.env.local'),'utf8');
+  assert.match(config,/^APP_ENV=local$/m); assert.match(config,/^MAIL_TRANSPORT=log$/m);
+  const browser = await chromium.launch({headless:true, ...(fs.existsSync(chromium.executablePath()) ? {} : {channel:'msedge'})});
+  try {
+    const context = await browser.newContext({viewport:{width:1280,height:900}});
+    await localOnly(context);
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.addInitScript(() => { window.originalNativeAlert = window.alert; });
+    await page.goto('http://127.0.0.1:8000/users/forgetpassword.php');
+    check(await page.getByRole('link',{name:'Employee',exact:true}).count() === 1, 'Recovery account choices render');
+    check(await page.evaluate(() => window.alert === window.originalNativeAlert), 'Toast component preserves native alert');
+    await page.clock.install();
+    await page.evaluate(() => window.showSuccessToast('<img src=x onerror="window.__injected=true">','<script>window.__injected=true</script>',0));
+    check(await page.locator('.toast img, .toast script').count() === 0, 'Toast title and message cannot inject HTML');
+    check(await page.locator('.toast').innerText().then(t => t.includes('<img') && t.includes('<script>')), 'Toast displays submitted markup as plain text');
+    check(!await page.evaluate(() => window.__injected), 'Toast input did not execute script');
+    check(await page.locator('.toast').getAttribute('role') === 'status', 'Success notification has a live status role');
+    await page.evaluate(() => { window.Toast.clear(); window.showInfoToast('Read this','Persistent while focused',8000); });
+    await page.locator('.toast-close').focus();
+    await page.clock.fastForward(10000);
+    check(await page.locator('.toast').count() === 1, 'Focused notification does not expire');
+    await page.getByRole('link',{name:'Employee',exact:true}).focus();
+    await page.clock.fastForward(8001);
+    check(await page.locator('.toast').count() === 0, 'Notification timer resumes after focus leaves');
+    await page.getByRole('link',{name:'Employee',exact:true}).focus();
+    await page.evaluate(() => window.showErrorToast('Something needs attention','Please review the fields.'));
+    await page.clock.fastForward(60000);
+    check(await page.locator('.toast').count() === 1, 'Error notification remains until dismissed');
+    check(await page.locator('.toast').getAttribute('role') === 'alert', 'Error notification has alert semantics');
+    await page.getByRole('button',{name:'Dismiss notification'}).click();
+    check(await page.getByRole('link',{name:'Employee',exact:true}).evaluate(el => el === document.activeElement), 'Dismissing a focused toast restores keyboard focus');
+    await page.clock.resume();
+    await page.setViewportSize({width:390,height:844});
+    await page.evaluate(() => window.showInfoToast('Workspace updated','A long message '.repeat(30),0));
+    const bounds = await page.locator('.toast').boundingBox();
+    check(bounds.x >= 0 && bounds.x + bounds.width <= 390, 'Long notification fits the mobile viewport');
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Recovery page has no mobile horizontal overflow');
+    await page.screenshot({path:path.join(evidence,'recovery-mobile.png'),fullPage:true});
+    await page.evaluate(() => window.Toast.clear());
+    const fixture = JSON.parse(fs.readFileSync(path.join(root,'.local/browser-fixture.json'),'utf8'));
+    await page.setViewportSize({width:1280,height:900});
+    await page.goto('http://127.0.0.1:8000/users/admin/login.php');
+    await page.locator('[name=email]').fill(fixture.email);
+    await page.locator('[name=password]').fill(fixture.password);
+    await page.getByRole('button',{name:/Sign in/}).click();
+    await page.waitForURL('**/users/admin/newdashboard.php');
+    check(await page.getByRole('heading',{name:'Your business, at a glance.'}).isVisible(), 'Business dashboard still works after consolidation');
+    await page.goto('http://127.0.0.1:8000/users/admin/workspace.php?module=projects&action=edit&id=' + fixture.project_id);
+    await page.locator('[name=projectName]').fill('Workspace launch');
+    await page.getByRole('button',{name:/Save/}).click();
+    await page.waitForURL('**/workspace.php?module=projects');
+    check(await page.locator('.toast-message').innerText().then(t => t.includes('Project updated.')), 'Saved record displays consolidated success notification');
+    check(await page.locator('[data-flash-type=success]').isHidden(), 'Enhanced success notice is not displayed twice');
+    await page.goto('http://127.0.0.1:8000/users/admin/newdashboard.php');
+    await page.screenshot({path:path.join(evidence,'dashboard-consolidated-desktop.png'),fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Dashboard fits mobile viewport');
+    await page.getByRole('button',{name:'Open navigation'}).click();
+    check(await page.locator('#sidebar').evaluate(el => !el.inert), 'Mobile navigation opens accessibly');
+    await page.keyboard.press('Escape');
+    check(await page.getByRole('button',{name:'Open navigation'}).evaluate(el => el === document.activeElement), 'Mobile navigation restores focus on Escape');
+    await page.screenshot({path:path.join(evidence,'dashboard-consolidated-mobile.png'),fullPage:true});
+    await page.goto('http://127.0.0.1:8000/users/developers/documentation.php');
+    check(await page.getByRole('heading',{name:'Workspace API guide.'}).isVisible(), 'Consolidated API guide opens');
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'API guide fits mobile viewport');
+    const staff = JSON.parse(fs.readFileSync(path.join(root,'.local/recovery-browser-fixture.json'),'utf8'));
+    await page.goto('http://127.0.0.1:8000/users/employees/login.php');
+    await page.locator('[name=email]').fill(staff.email);
+    await page.locator('[name=password]').fill(staff.password);
+    await page.locator('[name=workspace]').fill(staff.workspace);
+    await page.getByRole('button',{name:/Sign in/}).click();
+    await page.waitForURL('**/users/employees/workspace.php');
+    check(await page.locator('main').isVisible(), 'Recovered employee account can use its workspace');
+    for (const audience of ['business','talents','work']) {
+      await page.setViewportSize({width:1280,height:900});
+      await page.goto('http://127.0.0.1:8000/landing/' + audience + '/');
+      check(await page.locator('h1').count() === 1, audience + ' landing has one main heading');
+      check(await page.locator('.audience-nav [aria-current=page]').count() === 1, audience + ' landing identifies current audience');
+      check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), audience + ' landing fits desktop viewport');
+      await page.screenshot({path:path.join(evidence,'landing-' + audience + '-desktop.png'),fullPage:true});
+      await page.setViewportSize({width:390,height:844});
+      check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), audience + ' landing fits mobile viewport');
+      const actions = await page.locator('.hero-actions a').all();
+      for (const action of actions) check(await action.isVisible(), audience + ' primary action is visible on mobile');
+      await page.screenshot({path:path.join(evidence,'landing-' + audience + '-mobile.png'),fullPage:true});
+    }
+    check(errors.length === 0, 'Changed journeys have no uncaught browser errors');
+    const nojs = await browser.newContext({javaScriptEnabled:false,viewport:{width:390,height:844}});
+    await localOnly(nojs);
+    const fallback = await nojs.newPage();
+    await fallback.goto('http://127.0.0.1:8000/users/forgetpassword.php?role=employee');
+    await fallback.locator('[name=email]').fill('browser-recovery-' + Date.now() + '@example.test');
+    await fallback.locator('[name=workspace]').fill('1');
+    await fallback.getByRole('button',{name:'Send reset link'}).click();
+    check(await fallback.locator('[data-flash-type=success]').isVisible(), 'Recovery feedback works with JavaScript disabled');
+    await nojs.close(); await context.close();
+  } finally {
+    await browser.close();
+    const report = {checks:results.length,passed:results.filter(x=>x.passed).length,results};
+    fs.writeFileSync(path.join(evidence,'consolidation-browser.json'),JSON.stringify(report,null,2));
+    console.log(JSON.stringify({checks:report.checks,passed:report.passed}));
+  }
+})().catch(error => { console.error(error.message); process.exitCode = 1; });

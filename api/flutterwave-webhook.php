@@ -1,0 +1,20 @@
+<?php
+require_once __DIR__ . '/../app/flutterwave.php';
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') { header('Allow: POST'); json_response(['ok'=>false],405); }
+if (!flutterwave_ready()) json_response(['ok'=>false,'error'=>'Payment processing is unavailable.'],503);
+$body = file_get_contents('php://input',false,null,0,262145);
+if (!is_string($body) || strlen($body)>262144) json_response(['ok'=>false],413);
+if (!flutterwave_valid_signature($_SERVER['HTTP_VERIF_HASH'] ?? '')) json_response(['ok'=>false],401);
+$event = json_decode($body,true,512,JSON_BIGINT_AS_STRING);
+if (!is_array($event)) json_response(['ok'=>false],400);
+if (($event['event'] ?? '') !== 'charge.completed') json_response(['ok'=>true,'result'=>'ignored']);
+$reference = $event['data']['tx_ref'] ?? null;
+if (!is_string($reference) || !preg_match('/^ss-[a-f0-9]{40}$/D',$reference)) json_response(['ok'=>true,'result'=>'ignored']);
+$db = database(); $order = db_one($db,'SELECT * FROM billing_orders WHERE reference = ?',[$reference]);
+if (!$order || $order['provider'] !== 'flutterwave') json_response(['ok'=>true,'result'=>'ignored']);
+try {
+    $result = verify_billing_order($db,$order);
+    if ($result !== 'paid') json_response(['ok'=>false,'error'=>'Payment verification is pending.'],503);
+    json_response(['ok'=>true]);
+} catch (PaymentMismatch $error) { json_response(['ok'=>true,'result'=>'review_required']); }
+catch (PaymentUnavailable $error) { json_response(['ok'=>false,'error'=>'Payment verification is temporarily unavailable.'],503); }

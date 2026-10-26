@@ -1,76 +1,36 @@
 <?php
-session_start();
-// require_once('db.php');
-require_once '../../sql_queries/db.php';
-
-// Function to generate a unique company ID
-function generateUniqueCompanyID($conn) {
-    $unique = false;
-    $companyID = null;
-    while (!$unique) {
-        $tempID = mt_rand(100000, 999999); // Generate a random ID (adjust range as needed)
-        $stmt = $conn->prepare("SELECT company_id FROM users WHERE company_id = ?");
-        $stmt->bind_param("s", $tempID);
-        $stmt->execute();
-        $stmt->store_result();
-        if ($stmt->num_rows === 0) {
-            $unique = true;
-            $companyID = $tempID;
-        }
+require_once __DIR__ . '/../../app/auth.php';
+require_once __DIR__ . '/../../app/mail.php';
+require_post();
+$company = input('company_name'); $industry = input('industry'); $email = strtolower(input('email'));
+$password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
+$confirmation = is_string($_POST['confirm_password'] ?? null) ? $_POST['confirm_password'] : '';
+$_SESSION['signup_old'] = ['company_name'=>$company, 'industry'=>$industry, 'email'=>$email];
+$error = password_error($password, $confirmation);
+if ($company === '' || mb_strlen($company) > 120 || $industry === '' || mb_strlen($industry) > 100) $error = 'Enter your business name and industry.';
+if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 255) $error = 'Enter a valid email address.';
+if ($error) { flash($error,'error'); redirect('/users/admin/signup.php'); }
+if (!mail_ready()) { flash('Account registration is temporarily unavailable while email delivery is being connected. Please try again later.','error'); redirect('/users/admin/signup.php'); }
+$db = database(); rate_limit($db, 'signup', '', 10);
+if (db_one($db, 'SELECT id FROM users WHERE email = ?', [$email])) {
+    flash('An account may already use this email. Try signing in or resetting your password.','error'); redirect('/users/admin/signup.php');
+}
+$hash = password_hash($password, PASSWORD_DEFAULT);
+for ($attempt = 0; $attempt < 5; $attempt++) {
+    $companyId = random_int(100000,999999999);
+    try {
+        db_run($db, "INSERT INTO users (company_name, industry, email, password, company_id, status, freetrial, completed_profile) VALUES (?, ?, ?, ?, ?, 'Unverified', 'inactive', '0')", [$company,$industry,$email,$hash,$companyId]);
+        $userId = (int)$db->insert_id; break;
+    } catch (mysqli_sql_exception $ex) {
+        if ($ex->getCode() !== 1062) throw $ex;
+        if (db_one($db, 'SELECT id FROM users WHERE email = ?', [$email])) { flash('Please sign in or reset your password to access this account.','error'); redirect('/users/admin/login.php'); }
     }
-    return $companyID;
 }
-
-// Get form data
-$companyName = $_POST['company_name'];
-$industry = $_POST['industry'];
-$email = $_POST['email'];
-$password = $_POST['password'];
-$confirmPassword = $_POST['confirm_password'];
-$status = $_POST['status'];
-
-// Validate that passwords match
-if ($password !== $confirmPassword) {
-    echo "Passwords do not match!";
-    exit();
-}
-
-// Check if email already exists
-$stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
-$stmt->bind_param("s", $email);
-$stmt->execute();
-$stmt->store_result();
-
-if ($stmt->num_rows > 0) {
-    echo "An account with this email already exists!";
-} else {
-    // Generate a unique company ID
-    $companyID = generateUniqueCompanyID($conn);
-
-    // Insert new user into the database
-    $hashed_password = password_hash($password, PASSWORD_BCRYPT);
-    $stmt = $conn->prepare("INSERT INTO users (company_name, industry, email, password, company_id, status) VALUES (?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssss", $companyName, $industry, $email, $hashed_password, $companyID, $status);
-
-          if ($stmt->execute()) {
-    $_SESSION['email'] = $email;
-    $_SESSION['status'] = $status;
-    echo '<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #f0f0f0;">
-              <img src="success.png" alt="Success" style="width: 64px; height: 64px;">
-              <p style="font-size: 18px; color: #4CAF50; margin-top: 10px;">Your account has been created. Welcome!</p>
-          </div>';
-    echo '<script>
-              setTimeout(function() {
-                  window.location.href = "verifyaccount.php";
-              }, 3000);                                                                  
-          </script>';
-} else {
-    echo '<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #ffebee;">
-              <p style="font-size: 18px; color: #f44336; margin: 0;">Error: ' . $stmt->error . '</p>
-          </div>';
-}
-}
-
-$stmt->close();
-$conn->close();
-?>
+if (!isset($userId)) fail('We could not create the workspace. Please try again.',503);
+session_regenerate_id(true);
+$_SESSION['verification_user_id'] = $userId;
+unset($_SESSION['signup_old']);
+$token = issue_token($db, $userId, 'verify');
+$sent = send_account_mail($email, 'Verify your Simplr workspace', "Welcome to Simplr Suite.\n\nVerify your email using this link within one hour:\n" . account_link('/users/admin/verifyaccount.php', $token) . "\n\nIf you did not create this workspace, you can ignore this email.");
+flash($sent ? 'Your workspace has been created. Check your email for the verification link.' : 'Your workspace has been created, but we could not send the email. Use Resend below to try again.', $sent ? 'success' : 'error');
+redirect('/users/admin/verifyaccount.php');

@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+.local
+storage
+work
+node_modules
+/database_structure.sql
+/simplrco_dashboard.sql
+composer.phar

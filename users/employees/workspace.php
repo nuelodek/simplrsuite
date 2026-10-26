@@ -1,112 +1,20 @@
 <?php
-ob_start();
-
-session_start();
-include 'db.php';
-
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
-ini_set('log_errors', '1');
-
-// Check if company_id is set in the session
-if (!isset($_SESSION['employee_id'])) {
-    // Redirect to login.html if company_id is not found
-    header("Location: login.php");
-    exit();
+require_once __DIR__ . '/../../app/staff.php';
+require_once __DIR__ . '/../../app/view.php';
+$db = database(); $user = staff_user($db); $manager = $_SESSION['auth_role'] === 'manager';
+$name = $manager ? $user['manager_name'] : trim($user['first_name'] . ' ' . $user['last_name']);
+if ($manager) {
+    $projects = db_rows($db,'SELECT id, projectName, status, endDate FROM projects WHERE company_id = ? AND (projectManager = ? OR project_manager_id = ?) ORDER BY updated_at DESC LIMIT 50',[$user['company_id'],$user['id'],$user['unique_id']]);
+    $tasks = db_rows($db,'SELECT t.id,t.title,t.status,t.due_date,t.priority FROM tasks t JOIN projects p ON ' . task_project_join() . ' WHERE t.company_id = ? AND (p.projectManager = ? OR p.project_manager_id = ?) ORDER BY t.due_date LIMIT 100',[$user['company_id'],$user['id'],$user['unique_id']]);
+} else {
+    $projects = db_rows($db,'SELECT DISTINCT p.id,p.projectName,p.status,p.endDate FROM projects p JOIN tasks t ON ' . task_project_join() . ' WHERE t.company_id = ? AND (t.assignee = ? OR t.assignee = ?) ORDER BY p.endDate LIMIT 50',[$user['company_id'],(string)$user['id'],$user['unique_id']]);
+    $tasks = db_rows($db,'SELECT id,title,status,due_date,priority FROM tasks WHERE company_id = ? AND (assignee = ? OR assignee = ?) ORDER BY due_date LIMIT 100',[$user['company_id'],(string)$user['id'],$user['unique_id']]);
 }
-
-$user_id = $_SESSION['user_id']; 
-$employee_id = $_SESSION['employee_id'];
-$email = $_SESSION['email'];
-$company_id = $_SESSION['company_id'];
-$first_name = $_SESSION['first_name'];
-$last_name = $_SESSION['last_name'];
-$department_id = $_SESSION['department_id'];
-$manager_id = $_SESSION['manager_id'];
-$role_id = $_SESSION['role_id'];
-$phone = $_SESSION['phone'];
-$hire_date = $_SESSION['hire_date'];
-$job_title = $_SESSION['job_title'];
-$created_at = $_SESSION['created_at'];
-$updated_at  = $_SESSION['created_at'];
-$tool_id = isset($_SESSION['tool_id']) ? $_SESSION['tool_id'] : null;
-$assigned_at = $_SESSION['assigned_at']; 
-$assigned_by = $_SESSION['assigned_by'];
-$assignment_notes = $_SESSION['assignment_notes'];
-
-$company_name = "";
-$tool_name = "";
-
-// Database connection
-
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
-
-// Prepare and execute the query
-$stmt = $conn->prepare("SELECT company_name FROM users WHERE company_id = ?");
-$stmt->bind_param("i", $company_id);
-$stmt->execute();
-$result = $stmt->get_result();
-
-// Fetch the result
-if ($row = $result->fetch_assoc()) {
-    $company_name = $row['company_name'];
-}
-
-// Prepare and execute the query
-$stmt_tools = $conn->prepare("SELECT tool_name FROM tools WHERE id = ?");
-$stmt_tools->bind_param("i", $tool_id);
-$stmt_tools->execute();
-$result_tools = $stmt_tools->get_result();
-
-// Fetch the result
-if ($row = $result_tools->fetch_assoc()) {
-    $tool_name = $row['tool_name'];
-}
-
-// Close the statement and connection
-$stmt->close();
-$stmt_tools->close();
-$conn->close();
-
+$department = db_one($db,'SELECT department_name FROM departments WHERE id = ? AND company_id = ?',[$user['department_id'],$user['company_id']]);
+suite_start('My workspace','overview',$user);
 ?>
-            <?php 
-  if ($tool_id == "1") {
-      // Code for Payroll & Accounting tool
-      include "payroll_accounting.php";
-  } elseif ($tool_id == "2") {
-      // Code for Recruiting & Human Resources tool
-      include "recruiting_hr.php";
-  } elseif ($tool_id == "3") {
-      // Code for Customer Relationship Management tool
-      include "crm.php";
-  } elseif ($tool_id == "4") {
-      // Code for Cybersecurity Console tool
-      include "cybersecurity.php";
-  } elseif ($tool_id == "5") {
-      // Code for Project Management tool
-      include "project_management.php";
-  } elseif ($tool_id == "6") {
-      // Code for Business Strategy tool
-      include "business_strategy.php";
-  } elseif ($tool_id == "7") {
-      // Code for Risk Management & Compliance tool
-      include "risk_compliance.php";
-  } elseif ($tool_id == "8") {
-      // Code for Sales & Marketing tool
-      include "sales_marketing.php";
-  } elseif ($tool_id == "9") {
-      // Code for Product Development tool
-      include "product_development.php";
-  } elseif ($tool_id == "10") {
-      // Code for Office Management & Tasking tool
-      include "office_management.php";
-  } else {
-      // Code for default or unknown tool
-      echo "You haven't been assigned a tool, check back later";
-  }
-
-ob_end_flush();
-?>
+<div class="page-heading"><div><span class="eyebrow"><?= e(ucfirst($_SESSION['auth_role'])) ?> WORKSPACE</span><h1>Welcome back, <?= e($name) ?>.</h1><p>Your work at <?= e($user['company_name']) ?>, all in one place.</p></div></div>
+<div class="dashboard-columns"><div><section class="panel" id="tasks"><div class="panel-head"><h2><?= $manager ? 'Tasks in your projects' : 'Your assigned tasks' ?></h2><span class="badge"><?= count($tasks) ?> shown</span></div><?php if (!$tasks): ?><div class="empty-state"><?= icon('task') ?><h3>You’re all caught up.</h3><p><?= $manager ? 'Tasks will appear here when they are added to projects you manage.' : 'Tasks will appear here when your workspace administrator assigns work to you.' ?></p></div><?php else: ?><div class="table-wrap"><table class="data-table"><thead><tr><th>Task</th><th>Due date</th><th>Priority</th><th>Status</th></tr></thead><tbody><?php foreach ($tasks as $task): ?><tr><td><?= e($task['title']) ?></td><td><?= e($task['due_date']) ?></td><td><span class="badge <?= e($task['priority']) ?>"><?= e($task['priority']) ?></span></td><td><?php if (!$manager): ?><form method="post" action="/users/employees/task-status.php" style="display:flex;gap:8px" data-submit><?= csrf_field() ?><input type="hidden" name="task_id" value="<?= (int)$task['id'] ?>"><label class="sr-only" for="status-<?= (int)$task['id'] ?>">Status for <?= e($task['title']) ?></label><select name="status" id="status-<?= (int)$task['id'] ?>"><?php foreach (['pending','ongoing','completed'] as $status): ?><option value="<?= $status ?>" <?= $task['status'] === $status ? 'selected' : '' ?>><?= ucfirst($status) ?></option><?php endforeach; ?></select><button type="submit" class="button small secondary">Save</button></form><?php else: ?><span class="badge <?= e($task['status']) ?>"><?= e($task['status']) ?></span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?></section>
+<section class="panel"><div class="panel-head"><h2><?= $manager ? 'Projects you manage' : 'Projects you’re part of' ?></h2></div><?php if (!$projects): ?><div class="empty-state"><?= icon('folder') ?><h3>A space for your next project.</h3><p>Your assigned projects will appear here.</p></div><?php else: ?><ul class="record-list"><?php foreach ($projects as $project): ?><li><span class="record-icon"><?= icon('folder') ?></span><div><strong><?= e($project['projectName']) ?></strong><small><?= $project['endDate'] ? 'Due ' . e($project['endDate']) : 'No due date set' ?></small></div><span class="badge"><?= e($project['status'] ?: 'Planned') ?></span></li><?php endforeach; ?></ul><?php endif; ?></section></div>
+<aside><section class="panel" id="profile"><div class="panel-head"><h2>Your profile</h2></div><div class="panel-body"><span class="avatar" style="margin-bottom:18px"><?= e(mb_strtoupper(mb_substr($name,0,1))) ?></span><h3><?= e($name) ?></h3><p class="subtle"><?= e($user['email']) ?></p><p><strong>Department</strong><br><?= e($department['department_name'] ?? 'Not assigned') ?></p><p><strong>Workspace code</strong><br><?= e($user['company_id']) ?></p><small class="subtle">Contact your workspace administrator to update your profile or access.</small></div></section></aside></div>
+<?php suite_end(); ?>

@@ -1,6 +1,2 @@
 <?php
-session_start();
-session_destroy();
-header("Location: talentlogin.php");
-exit();
-?>
+require __DIR__ . '/../admin/logout.php';

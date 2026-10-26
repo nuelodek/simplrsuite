@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  purpose ENUM('verify', 'reset') NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX user_purpose (user_id, purpose)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  bucket CHAR(64) PRIMARY KEY,
+  attempts INT UNSIGNED NOT NULL DEFAULT 0,
+  window_started DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

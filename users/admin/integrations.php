@@ -1,0 +1,16 @@
+<?php
+require_once __DIR__ . '/../../app/auth.php';
+require_once __DIR__ . '/../../app/view.php';
+require_once __DIR__ . '/../../app/mail.php';
+require_once __DIR__ . '/../../app/paystack.php';
+$db = database(); $user = admin_user($db);
+suite_start('Integrations','integrations',$user);
+?>
+<div class="page-heading"><div><span class="eyebrow">CONNECT YOUR WORKSPACE</span><h1>Better together.</h1><p>A clear view of the services available to your workspace.</p></div></div>
+<div class="integration-grid"><section class="integration-card"><div class="feature-icon"><?= icon('plug') ?></div><h2>Account email</h2><span class="badge"><?= config('APP_ENV') === 'local' && config('MAIL_TRANSPORT') === 'log' ? 'Local test delivery' : (mail_ready() ? 'Configured · delivery unverified' : 'Not connected') ?></span><p>Verification and password recovery emails help your team access their workspace.</p><small><?= config('APP_ENV') === 'local' && config('MAIL_TRANSPORT') === 'log' ? 'Emails are saved locally for testing. No real messages are sent.' : 'Your workspace administrator manages the email connection.' ?></small></section>
+<section class="integration-card"><div class="feature-icon"><?= icon('wallet') ?></div><h2>Paystack billing</h2><span class="badge"><?= paystack_ready() ? (config('PAYSTACK_MODE','test') === 'live' ? 'Live configured · activation checks required' : 'Test mode configured') : 'Not connected' ?></span><p>Hosted checkout for prepaid toolkit subscriptions. Server verification updates access after a successful payment.</p><a class="text-link" href="/users/admin/billing.php">View billing</a><small>Provider test checkout and deployed webhooks must be verified before live launch.</small></section>
+<section class="integration-card"><div class="feature-icon"><?= icon('wallet') ?></div><h2>Flutterwave dollar billing</h2><span class="badge"><?= flutterwave_ready() ? (config('PAYSTACK_MODE','test') === 'live' ? 'Live configured · activation checks required' : 'Test mode configured') : 'Not connected' ?></span><p>Pay for the same workspace toolkits in US dollars, using Flutterwave hosted checkout.</p><a class="text-link" href="/users/admin/billing.php?currency=USD">View dollar billing</a><small>USD collection approval, provider test checkout and deployed webhooks require verification before launch.</small></section>
+<section class="integration-card"><div class="feature-icon"><?= icon('briefcase') ?></div><h2>Payroll & banking</h2><span class="badge">Not connected</span><p>Bank accounts, payouts, and payroll processing need a connected provider before they can be used.</p><small>No bank balances or transactions are shown until a connection is verified.</small></section>
+<section class="integration-card"><div class="feature-icon"><?= icon('grid') ?></div><h2>Workspace records</h2><span class="badge active">Available</span><p>Projects, tasks, CRM, finance records, and operations share your business workspace.</p><a class="text-link" href="/users/admin/modules.php">Open your tools <?= icon('arrow') ?></a></section></div>
+<p><a class="text-link" href="/users/developers/documentation.php">Read the workspace API guide <?= icon('arrow') ?></a></p>
+<?php suite_end(); ?>
