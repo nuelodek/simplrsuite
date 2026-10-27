@@ -1,5 +1,41 @@
 # Simplr Suite overnight continuation
 
+## Night continuation — editor, files, GitHub (26–27 October 2026)
+
+Requested: a WYSIWYG editor, a place to upload and download files, less archaic
+forms (especially Accounting), working integrations starting with GitHub, a
+searchable integration catalog, and a logo that matches the browser-tab icon.
+
+- Rich text: `app/richtext.php` (allowlist sanitizer that rebuilds HTML from
+  scratch) and `public/scripts/richtext.js` (toolbar editor on `textarea[data-rich]`).
+  All module textarea fields are rich; public job pages, record details, calendar
+  and meeting pages render sanitized HTML; CSV and ICS exports use plain text.
+- Files: `/users/admin/files.php` plus a Documents tool (migration 022). Attachments
+  also accept macro-free DOCX/XLSX/PPTX (package structure checked) and CSV.
+  Shared `store_record_attachment()` keeps quotas, locking and audit in one place.
+  Record lists have an Export button (existing permission-scoped CSV export).
+- Forms: one control style across the workspace; the journal form now groups
+  accounts by category, prefixes amounts with the currency, shows live totals and
+  balance, and no longer prints “Currency not set” beside every amount.
+- GitHub: migration 023, `app/github.php`, `/users/admin/github.php`,
+  `app/github-panel.php`. OAuth (state-checked) or fine-grained token; tokens are
+  AES-256-GCM encrypted with `APP_KEY` (local fallback key in ignored
+  `storage/keys/`). Project pages show issues, PRs and commits (2-minute cache);
+  Sync creates tasks from open issues once and completes tasks whose issues closed.
+  Nothing is written to GitHub. Preflight now requires `APP_KEY` for production.
+  Real GitHub has not been exercised here: that needs your token or an OAuth app.
+- Integrations page: GitHub card first; the planned catalog is searchable.
+- Logo: tab-icon mark (tilted −12°), “simplr” with 10px “SUITE” beneath the “s”.
+- Fixed Copilot bugs found by the suites: talent invitation/offer responses always
+  failed (version computed from joined columns), and shortlist empty-state copy
+  did not match its test.
+
+Verification: richtext unit 15/15, accounting unit 21/21, GitHub stub journey
+42/42, consolidation smoke 197/268/388, consolidation browser 55/55, access
+217/217 (with the local Apache helper on 8001), attachments 54/54, recruiting
+149/149, recruiting browser 35/35. The recruiting browser test now types into the
+rich editors. `.env.local` was temporarily set to log mail during runs and restored.
+
 ## Evening continuation — launch polish (26 October 2026)
 
 Requested: close UI and workflow gaps before tomorrow's market launch, using

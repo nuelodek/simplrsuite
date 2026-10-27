@@ -49,21 +49,6 @@ if (input('action') === 'remove') {
 if (!in_array(input('action'),['','upload'],true)) fail('Choose a valid attachment action.',422);
 [$validated,$error] = validate_attachment_upload($_FILES['attachment'] ?? null);
 if ($error) attachment_result(['ok'=>false,'error'=>$error],422);
-$upload = $validated; $size = $validated['size']; $type = $validated['type']; $name = $validated['name'];
-$stored = bin2hex(random_bytes(32)); $path = attachment_directory() . '/' . $stored; $moved = false;
-$db->begin_transaction();
-try {
-    // A company lock makes quotas and repeated uploads deterministic.
-    db_one($db,'SELECT id FROM users WHERE company_id = ? ORDER BY id LIMIT 1 FOR UPDATE',[$companyId]);
-    attachment_record($db,$user,$key,$recordId,true);
-    $count = (int)db_one($db,'SELECT COUNT(*) AS total FROM record_attachments WHERE company_id = ? AND module_key = ? AND record_id = ?',[$companyId,$key,$recordId])['total'];
-    $total = (int)db_one($db,'SELECT COALESCE(SUM(size_bytes),0) AS total FROM record_attachments WHERE company_id = ?',[$companyId])['total'];
-    if ($count >= 20 || $total + $size > 100*1024*1024) { $db->rollback(); attachment_result(['ok'=>false,'error'=>'This workspace allows 20 attachments per record and 100 MB in total. Remove an unneeded attachment before uploading.'],422); }
-    if (!is_dir(attachment_directory()) && !mkdir(attachment_directory(),0700,true)) throw new RuntimeException('Attachment storage unavailable');
-    if (!move_uploaded_file($upload['tmp_name'],$path)) throw new RuntimeException('Attachment could not be saved');
-    $moved = true;
-    db_run($db,'INSERT INTO record_attachments (company_id,module_key,record_id,original_name,storage_name,media_type,size_bytes,content_hash) VALUES (?,?,?,?,?,?,?,?)',[$companyId,$key,$recordId,$name,$stored,$type,$size,hash_file('sha256',$path)]);
-    $id = (int)$db->insert_id; audit_event($db,$companyId,'attachment.added',$key,(string)$recordId);
-    $db->commit();
-} catch (Throwable $error) { $db->rollback(); if ($moved && is_file($path)) unlink($path); throw $error; }
+[$id,$error] = store_record_attachment($db,$user,$key,$recordId,$validated);
+if ($error) attachment_result(['ok'=>false,'error'=>$error],422);
 attachment_result(['ok'=>true,'id'=>$id,'message'=>'Attachment added.'],201);

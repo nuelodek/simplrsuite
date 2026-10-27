@@ -83,6 +83,7 @@ if (isset($_GET['export'])) {
     $out = fopen('php://output','w'); fwrite($out,"\xEF\xBB\xBF");
     fputcsv($out,[...$fields,...($money ? ['record_currency'] : [])],',','"','');
     foreach ($rows as $row) {
+        foreach ($module['fields'] as $name=>$field) if ($field['type'] === 'textarea' && isset($row[$name])) $row[$name] = rich_text_plain($row[$name]);
         $cells = array_map(function($value) { $value = (string)($value ?? ''); return preg_match('/^[\s\x00-\x1f]*[=+@-]/u',$value) ? "'" . $value : $value; },array_values($row));
         if ($money) $cells[] = $settings['currency'] ?: 'Not specified';
         fputcsv($out,$cells,',','"','');

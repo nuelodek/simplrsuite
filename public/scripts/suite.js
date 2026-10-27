@@ -97,6 +97,47 @@ document.querySelectorAll('[data-filter]').forEach(input => {
     if (counter) counter.textContent = `${visible} ${visible === 1 ? 'record' : 'records'}`;
   });
 });
+// Integration catalog search: filters services by name and hides empty groups.
+document.querySelectorAll('[data-catalog-search]').forEach(input => {
+  const groups = [...document.querySelectorAll('.legacy-integration-group')];
+  const count = document.querySelector('[data-catalog-count]');
+  const empty = document.querySelector('[data-catalog-empty]');
+  input.addEventListener('input', () => {
+    const query = input.value.trim().toLocaleLowerCase();
+    let shown = 0;
+    groups.forEach(group => {
+      let matches = 0;
+      group.querySelectorAll('.legacy-integration-item').forEach(item => {
+        const hit = !query || item.textContent.toLocaleLowerCase().includes(query);
+        item.hidden = !hit;
+        if (hit) matches++;
+      });
+      group.hidden = matches === 0;
+      if (query && matches) group.open = true;
+      shown += matches;
+    });
+    if (count) count.textContent = query ? `${shown} ${shown === 1 ? 'match' : 'matches'}` : '';
+    if (empty) empty.hidden = shown !== 0;
+  });
+});
+// Destructive forms ask once before submitting.
+document.querySelectorAll('form[data-confirm]').forEach(form => form.addEventListener('submit', event => {
+  if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+}));
+// Drop zones show the chosen file and suggest a title from its name.
+document.querySelectorAll('[data-dropzone]').forEach(zone => {
+  const input = zone.querySelector('input[type=file]');
+  const label = zone.querySelector('[data-dropzone-label]');
+  const title = document.getElementById(input.dataset.titleTarget || '');
+  ['dragenter','dragover'].forEach(type => zone.addEventListener(type, () => zone.classList.add('is-over')));
+  ['dragleave','drop'].forEach(type => zone.addEventListener(type, () => zone.classList.remove('is-over')));
+  input.addEventListener('change', () => {
+    const file = input.files[0];
+    zone.classList.toggle('has-file', !!file);
+    label.textContent = file ? file.name : 'Drop a file here or browse';
+    if (file && title && !title.value) title.placeholder = file.name.replace(/\.[^.]+$/, '');
+  });
+});
 // Topbar menus: one open at a time, closed by Escape or an outside click.
 const topbarMenus = [...document.querySelectorAll('.topbar-menu')];
 topbarMenus.forEach(menu => menu.addEventListener('toggle', () => {

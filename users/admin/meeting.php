@@ -33,7 +33,7 @@ suite_start('Meeting · ' . $event['event_name'], 'calendar', $user);
             <div><dt>When</dt><dd><?= e($event['start_datetime']) ?> to <?= e($event['end_datetime']) ?></dd></div>
             <div><dt>Timezone</dt><dd><?= e($event['timezone']) ?></dd></div>
             <div><dt>Provider</dt><dd><?= e($provider === 'simplr' ? 'Simplr video room' : ucfirst(str_replace('-', ' ', $provider))) ?></dd></div>
-            <div><dt>Agenda</dt><dd class="preserve-lines"><?= e($event['agenda'] ?: 'No agenda has been added yet.') ?></dd></div>
+            <div><dt>Agenda</dt><dd class="rich-text"><?= trim((string)$event['agenda']) !== '' ? rich_text_html($event['agenda']) : 'No agenda has been added yet.' ?></dd></div>
         </dl>
     </div>
 </section>

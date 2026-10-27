@@ -78,7 +78,7 @@ try:
     beta_token,_=beta.form('/users/help.php')
     expect(beta.request('/api/attachments.php',{**payload,'csrf_token':beta_token,'action':'remove','id':file_id})[0]==404,'Other company cannot delete attachment')
     status,data,_=send(admin,'/api/attachments.php',{**payload,'return_to_record':'1'},('invalid.txt',b'no'))
-    expect(status==200 and b'Only PDF, PNG and JPEG' in data,'HTML upload validation returns to record with error')
+    expect(status==200 and b'Only PDF, PNG, JPEG, Word, Excel, PowerPoint and CSV files are accepted.' in data,'HTML upload validation returns to record with error')
     expect(admin.request('/api/attachments.php',{**payload,'action':'remove','id':file_id})[0]==200,'Owner removes only this synthetic test attachment')
     expect(not (ROOT/'storage/attachments'/stored).exists(),'Removal clears stored bytes')
     expect(admin.request('/api/attachments.php',{**payload,'action':'remove','id':file_id})[0]==404,'Repeated removal has no effect')

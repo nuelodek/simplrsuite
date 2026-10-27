@@ -19,7 +19,7 @@ page_head($job ? $job['title'].' at '.$job['company_name'] : 'Find your next rol
 <main id="main" class="jobs-main">
 <?php if ($job): $open = job_accepts_applications($db,$job); ?>
 <a class="text-link" href="/jobs/">← Browse all roles</a><div class="page-heading"><div><span class="eyebrow"><?= e($job['company_name']) ?></span><h1><?= e($job['title']) ?></h1><p><?= e($job['location']) ?> · <?= e($job['workplace']) ?> · <?= e($job['employment_type']) ?></p></div><span class="badge"><?= $open ? 'Accepting applications' : 'Applications closed' ?></span></div>
-<section class="panel"><div class="panel-body"><h2>About the role</h2><p class="talent-copy"><?= e($job['description']) ?></p><?php if ($job['requirements']): ?><h2>Skills and requirements</h2><p class="talent-copy"><?= e($job['requirements']) ?></p><?php endif; ?>
+<section class="panel"><div class="panel-body"><h2>About the role</h2><div class="rich-text"><?= rich_text_html($job['description']) ?></div><?php if ($job['requirements']): ?><h2>Skills and requirements</h2><div class="rich-text"><?= rich_text_html($job['requirements']) ?></div><?php endif; ?>
 <?php if ($job['closing_date']): ?><p class="subtle">Applications close at the end of <?= e($job['closing_date']) ?> (<?= e($job['timezone']) ?>).</p><?php endif; ?>
 <?php if ($open): ?><a class="button" href="/users/talents/apply.php?job=<?= e($job['public_id']) ?>">Apply for this role <?= icon('arrow') ?></a><p class="subtle">Use your verified talent account. You will review the details shared with this employer before submitting.</p><?php else: ?><div class="notice info">This role is no longer accepting applications. Existing applicants can track their progress in My applications.</div><?php endif; ?></div></section>
 <?php else: ?>

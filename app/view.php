@@ -36,17 +36,24 @@ function icon(string $name, string $class = ''): string {
         'chevron' => '<path d="m6 9 6 6 6-6"/>',
         'mail' => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
         'pin' => '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
+        'trash' => '<path d="M4 7h16M10 11v6m4-6v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+        'file' => '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6m-6 4h4"/>',
+        'upload' => '<path d="M12 16V4m-5 5 5-5 5 5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+        'download' => '<path d="M12 4v12m-5-5 5 5 5-5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+        'github' => '<path d="M9 19c-4 1.3-4-2-6-2.5m12 5v-3.4a3 3 0 0 0-.8-2.3c2.7-.3 5.5-1.3 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.5 2.1 5.5 2.4 5.5 2.4a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 8.8c0 4.6 2.8 5.7 5.5 6a3 3 0 0 0-.8 2.3V21"/>',
+        'branch' => '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10m12-8c0 5-6 4-11 8"/>',
+        'refresh' => '<path d="M20 11a8 8 0 0 0-14.8-4M4 4v4h4m-4 5a8 8 0 0 0 14.8 4M20 20v-4h-4"/>',
     ];
     return '<svg class="icon ' . e($class) . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . ($paths[$name] ?? $paths['grid']) . '</svg>';
 }
 function page_head(string $title, array $metadata = []): void {
-    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#172f2b"><title>' . e($title) . ' · Simplr Suite</title><link rel="icon" href="/public/images/brand.svg" type="image/svg+xml"><link rel="stylesheet" href="/public/styles/suite.css"><link rel="stylesheet" href="/public/styles/toast.css"><script src="/public/scripts/toast.js" defer></script><script src="/public/scripts/suite.js" defer></script>';
+    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#172f2b"><title>' . e($title) . ' · Simplr Suite</title><link rel="icon" href="/public/images/brand.svg" type="image/svg+xml"><link rel="stylesheet" href="/public/styles/suite.css"><link rel="stylesheet" href="/public/styles/toast.css"><script src="/public/scripts/toast.js" defer></script><script src="/public/scripts/suite.js" defer></script><script src="/public/scripts/richtext.js" defer></script>';
     if (isset($metadata['description'])) echo '<meta name="description" content="' . e($metadata['description']) . '"><meta property="og:description" content="' . e($metadata['description']) . '"><meta property="og:title" content="' . e($title) . '"><meta property="og:type" content="website">';
     if (isset($metadata['canonical'])) echo '<link rel="canonical" href="' . e($metadata['canonical']) . '"><meta property="og:url" content="' . e($metadata['canonical']) . '">';
     if (isset($metadata['robots'])) echo '<meta name="robots" content="' . e($metadata['robots']) . '">';
     echo '</head>';
 }
-function brand(): string { return '<a class="brand" href="/" aria-label="Simplr Suite home"><span class="brand-mark">s</span>simplr<span class="brand-suffix">suite</span></a>'; }
+function brand(): string { return '<a class="brand" href="/" aria-label="Simplr Suite home"><svg class="brand-logo" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="12" fill="#172f2b"/><path d="M27 12H17a5 5 0 0 0 0 10h6a3 3 0 0 1 0 6H13" fill="none" stroke="#cce987" stroke-width="5" stroke-linecap="round"/></svg><span class="brand-words"><span class="brand-name">simplr</span><span class="brand-suffix">suite</span></span></a>'; }
 function auth_start(string $title, string $subtitle): void {
     page_head($title);
     echo '<body class="auth-layout"><aside class="auth-story">' . brand() . '<div><h2>Business workspace</h2><p>Manage projects, people, customers, and finances.</p><div class="story-orbit">' . icon('grid') . icon('users') . icon('chart') . icon('folder') . '</div></div></aside><main class="auth-main"><a class="back-link" href="/">← Back to Simplr</a><div class="auth-card"><h1>' . e($title) . '</h1><p class="subtle">' . e($subtitle) . '</p>';
@@ -84,6 +91,7 @@ function suite_start(string $title, string $active, array $user): void {
         ['projects','Projects','folder','/users/admin/workspace.php?module=projects','Work'],
         ['tasks','Tasks','task','/users/admin/workspace.php?module=tasks','Work'],
         ['calendar','Calendar','calendar','/users/admin/calendar.php','Work'],
+        ['files','Files','file','/users/admin/files.php','Work'],
         ['people','People & teams','users','/users/admin/workspace.php?module=departments','People'],
         ['recruiting','Recruiting','briefcase','/users/admin/talent-directory.php','People'],
         ['sales','Sales & CRM','target','/users/admin/workspace.php?module=leads','Business'],
@@ -100,7 +108,7 @@ function suite_start(string $title, string $active, array $user): void {
     ];
     $grants = [];
     if (in_array($role, ['employee','manager'], true)) {
-        $nav = [['overview','My workspace','grid','/users/employees/workspace.php',''], ['tasks','My tasks','task','/users/employees/workspace.php#tasks',''], ['modules','My tools','box','/users/admin/modules.php',''], ['reports','Reports','chart','/users/admin/reports.php',''], ['help','Workspace help','help','/users/help.php',''], ['profile','My profile','user','/users/employees/workspace.php#profile','']];
+        $nav = [['overview','My workspace','grid','/users/employees/workspace.php',''], ['tasks','My tasks','task','/users/employees/workspace.php#tasks',''], ['modules','My tools','box','/users/admin/modules.php',''], ['files','Files','file','/users/admin/files.php',''], ['reports','Reports','chart','/users/admin/reports.php',''], ['help','Workspace help','help','/users/help.php',''], ['profile','My profile','user','/users/employees/workspace.php#profile','']];
         foreach (db_rows(database(),'SELECT module_key, access_level FROM staff_tool_access WHERE company_id = ? AND staff_role = ? AND staff_id = ? AND access_level IN (\'view\',\'edit\')',[(int)$user['company_id'],$role,(int)$user['id']]) as $grant) $grants[$grant['module_key']] = $grant['access_level'];
         if (isset($grants['jobs'])) $nav[] = ['recruiting','Recruiting','briefcase','/users/admin/talent-directory.php',''];
     }
@@ -122,7 +130,7 @@ function suite_start(string $title, string $active, array $user): void {
         ],
         default => [
             ['Overview','Start here for a snapshot of projects, open tasks, key counts, and your setup checklist.',['overview']],
-            ['Projects, tasks, and people','Use these pages to organize work, track tasks, and manage departments and team records.',['projects','tasks','people']],
+            ['Projects, tasks, and people','Use these pages to organize work, track tasks, keep files, and manage departments and team records.',['projects','tasks','files','people']],
             ['Business tools','Open the relevant area for customer relationships, finances, recruiting, or browse all available tools.',['sales','finance','recruiting','modules']],
             ['Accounting','Post balanced journal entries and review financial statements and ratios.',['accounting']],
             ['Planning and insight','Use Calendar to review events, Reports to summarize activity, and Activity to review workspace changes.',['calendar','reports','activity']],

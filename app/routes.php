@@ -68,6 +68,8 @@ return [
     '/users/admin/fetchdepartements.php' => 'users/admin/fetchdepartements.php',
     '/users/admin/fetchemployeesfortask.php' => 'users/admin/fetchemployeesfortask.php',
     '/users/admin/fetchmanagersforproject.php' => 'users/admin/fetchmanagersforproject.php',
+    '/users/admin/files.php' => 'users/admin/files.php',
+    '/users/admin/github.php' => 'users/admin/github.php',
     '/users/admin/forgetpassword.php' => 'users/admin/forgetpassword.php',
     '/users/admin/generatetask.php' => 'users/admin/generatetask.php',
     '/users/admin/get_team_data.php' => 'users/admin/get_team_data.php',

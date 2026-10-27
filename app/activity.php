@@ -56,6 +56,11 @@ function activity_entries(mysqli $db, int $companyId, array $rows, int $viewerId
             'help.updated' => $actor . ' updated a help request',
             'settings.updated' => $actor . ' updated workspace settings',
             'job.social_sync_requested' => $actor . ' queued a social post for ' . $name,
+            'integration.connected' => $actor . ' connected ' . (['github'=>'GitHub'][$row['target_id']] ?? ucfirst($row['target_id'])) . (isset($details['account']) ? ' as @' . $details['account'] : ''),
+            'integration.disconnected' => $actor . ' disconnected ' . (['github'=>'GitHub'][$row['target_id']] ?? ucfirst($row['target_id'])),
+            'github.repository_linked' => $actor . ' linked ' . ($details['repository'] ?? 'a repository') . ' to ' . $name,
+            'github.repository_unlinked' => $actor . ' unlinked ' . ($details['repository'] ?? 'a repository') . ' from ' . $name,
+            'github.issues_synced' => $actor . ' synced GitHub issues for ' . $name . (isset($details['imported']) ? ' (' . (int)$details['imported'] . ' new, ' . (int)($details['completed'] ?? 0) . ' completed)' : ''),
             'talent.shortlisted' => $actor . ' shortlisted a candidate',
             'talent.removed_from_shortlist' => $actor . ' removed a candidate from the shortlist',
             'talent.invited' => $actor . ' invited a candidate to apply',
@@ -66,7 +71,7 @@ function activity_entries(mysqli $db, int $companyId, array $rows, int $viewerId
         };
         $url = null;
         if ($module && $target) $url = $key === 'applications' ? '/users/admin/application.php?id=' . $targetId : '/users/admin/workspace.php?module=' . rawurlencode($key) . '&action=view&id=' . $targetId;
-        $icon = match (explode('.',$row['action'])[0]) { 'application','talent','job' => 'briefcase', 'access' => 'shield', 'attachment' => 'folder', 'help' => 'help', 'settings' => 'settings', default => $module['icon'] ?? 'pulse' };
+        $icon = match (explode('.',$row['action'])[0]) { 'github','integration' => 'github', 'application','talent','job' => 'briefcase', 'access' => 'shield', 'attachment' => 'folder', 'help' => 'help', 'settings' => 'settings', default => $module['icon'] ?? 'pulse' };
         $entries[] = ['text'=>$text,'url'=>$url,'icon'=>$icon,'time'=>$row['created_at'],'actor'=>$actor];
     }
     return $entries;

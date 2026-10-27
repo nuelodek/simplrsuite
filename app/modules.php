@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/access.php';
+require_once __DIR__ . '/richtext.php';
 // This allowlist is shared by the HTML workspace and its record API. SQL identifiers
 // are never accepted from a request. Existing tables remain the source of truth.
 function field(string $label, string $type = 'text', bool $required = true, int $max = 255, array $options = []): array {
@@ -69,6 +70,9 @@ function modules(): array {
         'jobs' => ['title'=>'Job postings','singular'=>'job posting','nav'=>'recruiting','icon'=>'briefcase','description'=>'Publish open roles and receive applications in your workspace.','table'=>'job_posts','pk'=>'id','fields'=>[
             'title'=>field('Job title','text',true,150),'location'=>field('Location','text',true,160),'workplace'=>field('Work arrangement','select',true,20,['remote','hybrid','on-site']),'employment_type'=>field('Employment type','select',true,30,['full-time','part-time','contract','internship']),'description'=>field('Role description','textarea',true,12000),'requirements'=>field('Skills and requirements','textarea',false,8000),'closing_date'=>field('Applications close on','date',false),'timezone'=>field('Closing-date timezone','select',true,64,DateTimeZone::listIdentifiers()),'status'=>field('Publication status','select',true,20,['draft','published','closed']),'social_targets'=>field('Share to social media','social-platforms',false,255,['linkedin','facebook','instagram']),
         ],'columns'=>['title','location','workplace','employment_type','status','closing_date']],
+        'documents' => ['title'=>'Documents','singular'=>'document','nav'=>'files','icon'=>'file','description'=>'Keep contracts, policies and shared files in one organised library.','table'=>'documents','pk'=>'id','fields'=>[
+            'title'=>field('Document title','text',true,160),'category'=>field('Category','select',true,50,['General','Contracts','Finance','HR & people','Policies','Sales & marketing','Product','Legal']),'notes'=>field('Notes','textarea',false,10000),
+        ],'columns'=>['title','category','created_at']],
         'events' => ['title'=>'Events & meetings','singular'=>'event','nav'=>'calendar','icon'=>'calendar','description'=>'Plan meetings and events with a clear time, place, and agenda.','table'=>'events','pk'=>'event_id','fields'=>[
             'event_name'=>field('Event name'),'start_datetime'=>field('Start time','datetime-local'),'end_datetime'=>field('End time','datetime-local'),'timezone'=>field('Timezone','select',true,64,DateTimeZone::listIdentifiers()),'event_type'=>field('Meeting type','select',true,100,['online','in-person']),'meeting_provider'=>field('Meeting provider','select',false,50,['simplr','zoom','google-meet','microsoft-teams','custom']),'meetup_venue'=>field('Venue','text',false),'meet_link'=>field('Meeting link','url',false),'agenda'=>field('Agenda','textarea',false,10000),'event_description'=>field('Description','textarea',false,10000),'organizer'=>field('Organizer','text',false),
         ],'columns'=>['event_name','start_datetime','end_datetime','timezone','event_type']],
@@ -230,6 +234,7 @@ function validate_record(mysqli $db, int $companyId, array $module, array $poste
             $values[$name] = implode(',', $chosen);
             continue;
         }
+        if ($type === 'textarea') $value = rich_text_clean($value);
         if ($value === '') {
             if ($field['required']) $errors[$name] = 'Enter ' . strtolower($field['label']) . '.';
             $values[$name] = in_array($type,['date','money'],true) || str_starts_with($type,'ref:') || ($type === 'email' && !$field['required']) ? null : '';
@@ -409,6 +414,7 @@ function record_cell_html(array $module, string $column, array $row, string $cur
     $type = $module['fields'][$column]['type'] ?? '';
     if ($value === null || $value === '') return '<span class="subtle">—</span>';
     if (in_array($column,['status','stage','priority','severity','team_status'],true)) return '<span class="badge ' . e(stage_class($value)) . '">' . e($value) . '</span>';
+    if ($type === 'textarea') return e(mb_strimwidth(preg_replace('/\s+/u',' ',rich_text_plain((string)$value)) ?? '',0,120,'…'));
     if ($type === 'money') return '<span class="money">' . ($currency !== '' ? '<small>' . e($currency) . '</small> ' : '') . e(number_format((float)$value,2)) . '</span>';
     if ($type === 'date' || preg_match('/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/D',(string)$value)) {
         $time = strtotime((string)$value);
@@ -433,7 +439,8 @@ function progress_html(?array $progress): string {
 function record_title(array $module, array $row): string {
     if (isset($module['fields']['first_name'], $module['fields']['last_name'])) return trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
     $first = $module['columns'][0];
-    return trim((string)($row[$first] ?? '')) ?: ucfirst($module['singular']) . ' #' . ($row[$module['pk']] ?? '');
+    $title = ($module['fields'][$first]['type'] ?? '') === 'textarea' ? mb_strimwidth(preg_replace('/\s+/u',' ',rich_text_plain($row[$first] ?? '')),0,90,'…') : (string)($row[$first] ?? '');
+    return trim($title) ?: ucfirst($module['singular']) . ' #' . ($row[$module['pk']] ?? '');
 }
 function move_record_stage(mysqli $db, int $companyId, string $key, int $id, string $stage, string $version): string {
     $module = module_config($key); $field = module_stage_field($key);

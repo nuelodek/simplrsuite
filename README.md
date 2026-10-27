@@ -99,6 +99,26 @@ serving the repository directly without its deny rules can expose private files.
   with the arrow keys. A move revalidates the whole record and uses the same
   edit grant, CSRF and stale-version checks as the edit form
   (`POST /api/records.php?module=…` with `action=move`).
+- Rich text for long fields (descriptions, agendas, job descriptions, notes): a
+  toolbar editor that degrades to a plain textarea. The server stores a small
+  allowlisted HTML subset rebuilt from scratch (`app/richtext.php`); older plain
+  text is escaped and shown with its line breaks. CSV and calendar exports use
+  plain text. `php scripts/richtext_unit_test.php` covers the sanitizer.
+- Files (`/users/admin/files.php`): every attachment the signed-in person can open,
+  searchable by name, tool and type, with a 100 MB workspace storage meter. Uploads
+  there create a record in the new Documents tool. Attachments accept PDF, PNG,
+  JPEG, macro-free Word/Excel/PowerPoint (`.docx/.xlsx/.pptx`) and CSV. Every
+  record list has an Export button (CSV through the existing report export).
+- GitHub (`/users/admin/github.php`): the workspace owner connects with GitHub
+  sign-in (needs `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` and a GitHub OAuth App
+  whose callback is `<APP_URL>/users/admin/github.php?oauth=callback`) or with a
+  fine-grained personal access token. Tokens are encrypted with AES-256-GCM using
+  `APP_KEY` (required in production; local development creates a private key in
+  `storage/keys/`). Linked repositories show open issues, pull requests and recent
+  commits on the project page; Sync turns open issues into tasks once and completes
+  tasks whose issues closed. Nothing is written to GitHub. Test it offline with
+  `scripts/github_stub_server.php` and `scripts/github_smoke_test.py` (instructions
+  at the top of the test).
 - Employee and manager directories and email invitations. Invitees choose their
   own password. Inviting does not immediately change an existing password.
 - Staff sign-in and scoped workspaces. Employees update their assigned task
@@ -170,6 +190,7 @@ python scripts/talent_smoke_test.py
 # Includes core and talent checks, then staff recovery and consolidation checks:
 python scripts/consolidation_smoke_test.py
 php scripts/accounting_unit_test.php
+php scripts/richtext_unit_test.php
 python scripts/marketing_smoke_test.py
 node scripts/consolidation_browser_test.cjs
 node --check public/scripts/suite.js

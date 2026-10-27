@@ -60,7 +60,7 @@ function accounting_date_valid(string $value): bool {
 function accounting_currency_amount(int $cents, string $currency): string {
     $absolute = abs($cents);
     $amount = ($cents < 0 ? '-' : '') . number_format(intdiv($absolute, 100)) . '.' . str_pad((string)($absolute % 100), 2, '0', STR_PAD_LEFT);
-    return ($currency !== '' ? $currency : 'Currency not set') . ' ' . $amount;
+    return $currency !== '' ? $currency . ' ' . $amount : $amount;
 }
 
 function accounting_report_totals(array $accountBalances, int $cumulativeNetIncomeCents): array {
