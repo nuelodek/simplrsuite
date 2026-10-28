@@ -58,7 +58,7 @@
 <script>
     async function createAccount(customerId) {
       const API_URL = 'https://api.s.unit.sh';
-      const API_KEY = 'Bearer v2.public.eyJyb2xlIjoiYWRtaW4iLCJ1c2VySWQiOiIxMjI2OSIsInN1YiI6InN1cGVyYWRtaW5Ac2ltcGxyLmNvbS5uZyIsImV4cCI6IjIwMjQtMDgtMTdUMTM6MzU6MTIuOTM1WiIsImp0aSI6IjM1NTAxOCIsIm9yZ0lkIjoiNTU5NyIsInNjb3BlIjoiYXBwbGljYXRpb25zLXdyaXRlIGFjY291bnRzLXdyaXRlIGNhcmRzLXdyaXRlIiwib3JnIjoiU2ltcGxyIEJ1c2luZXNzIFN1aXRlIiwidXNlclR5cGUiOiJvcmciLCJpc1VuaXRQaWxvdCI6ZmFsc2V9ZouVA3aLkTmu7jE6zHra1PWnzasIG8gCNSNu--3tjbcTTYFU1WzfCIJGRq009YnjHreztDWid9BqdhLLqEBHBw'; // Replace with your actual API key
+      const API_KEY = 'Bearer '; // Replace with your actual API key
 
       try {
         // Create account
@@ -141,7 +141,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/vnd.api+json',
-            'Authorization': 'Bearer v2.public.eyJyb2xlIjoiYWRtaW4iLCJ1c2VySWQiOiIxMjI2OSIsInN1YiI6InN1cGVyYWRtaW5Ac2ltcGxyLmNvbS5uZyIsImV4cCI6IjIwMjQtMDgtMTdUMTM6MzU6MTIuOTM1WiIsImp0aSI6IjM1NTAxOCIsIm9yZ0lkIjoiNTU5NyIsInNjb3BlIjoiYXBwbGljYXRpb25zLXdyaXRlIGFjY291bnRzLXdyaXRlIGNhcmRzLXdyaXRlIiwib3JnIjoiU2ltcGxyIEJ1c2luZXNzIFN1aXRlIiwidXNlclR5cGUiOiJvcmciLCJpc1VuaXRQaWxvdCI6ZmFsc2V9ZouVA3aLkTmu7jE6zHra1PWnzasIG8gCNSNu--3tjbcTTYFU1WzfCIJGRq009YnjHreztDWid9BqdhLLqEBHBw' // Replace with your actual API key
+            'Authorization': 'Bearer ' // Replace with your actual API key
           },
           body: JSON.stringify(jsonData)
         });

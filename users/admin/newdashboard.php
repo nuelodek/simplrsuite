@@ -7,13 +7,16 @@ $db = database(); $user = admin_user($db); $companyId = (int)$user['company_id']
 $settings = workspace_settings($db,$companyId); $currency = (string)($settings['currency'] ?? '');
 $count = fn(string $sql, array $params = []) => (int)db_one($db,$sql,[$companyId,...$params])['count'];
 $counts = [];
-foreach (['projects','tasks','employees','managers','customers','departments'] as $table) $counts[$table] = $count("SELECT COUNT(*) AS count FROM `$table` WHERE company_id = ?");
+foreach (['projects','tasks','employees','managers','customers','departments'] as $table) {
+    $archiveFilter = in_array($table,['projects','tasks','employees','managers'],true) ? ' AND archived_at IS NULL' : '';
+    $counts[$table] = $count("SELECT COUNT(*) AS count FROM `$table` WHERE company_id = ?$archiveFilter");
+}
 $today = date('Y-m-d');
 $taskStatus = ['pending'=>0,'ongoing'=>0,'completed'=>0];
-foreach (db_rows($db,'SELECT status, COUNT(*) AS count FROM tasks WHERE company_id = ? GROUP BY status',[$companyId]) as $row) if (isset($taskStatus[$row['status']])) $taskStatus[$row['status']] = (int)$row['count'];
+foreach (db_rows($db,'SELECT status, COUNT(*) AS count FROM tasks WHERE company_id = ? AND archived_at IS NULL GROUP BY status',[$companyId]) as $row) if (isset($taskStatus[$row['status']])) $taskStatus[$row['status']] = (int)$row['count'];
 $openTasks = $taskStatus['pending'] + $taskStatus['ongoing'];
-$overdue = $count("SELECT COUNT(*) AS count FROM tasks WHERE company_id = ? AND status != 'completed' AND due_date < ?",[$today]);
-$activeProjects = $count("SELECT COUNT(*) AS count FROM projects WHERE company_id = ? AND status IN ('ongoing','pending')");
+$overdue = $count("SELECT COUNT(*) AS count FROM tasks WHERE company_id = ? AND archived_at IS NULL AND status != 'completed' AND due_date < ?",[$today]);
+$activeProjects = $count("SELECT COUNT(*) AS count FROM projects WHERE company_id = ? AND archived_at IS NULL AND status IN ('ongoing','pending')");
 $pipeline = db_one($db,"SELECT COUNT(*) AS count, COALESCE(SUM(amount),0) AS total FROM deals WHERE company_id = ? AND stage IN ('proposal','negotiation')",[$companyId]);
 $stages = [];
 foreach (db_rows($db,'SELECT stage, COUNT(*) AS count, COALESCE(SUM(amount),0) AS total FROM deals WHERE company_id = ? GROUP BY stage',[$companyId]) as $row) $stages[$row['stage']] = $row;
@@ -22,8 +25,8 @@ $ledger = db_one($db,"SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount 
 $expenses = (float)db_one($db,'SELECT COALESCE(SUM(amount),0) AS total FROM expenses WHERE company_id = ? AND date BETWEEN ? AND ?',[$companyId,$monthStart,$monthEnd])['total'];
 $income = (float)$ledger['income']; $spent = (float)$ledger['spent'] + $expenses;
 $unpaid = db_one($db,"SELECT COUNT(*) AS count, COALESCE(SUM(amount),0) AS total, COALESCE(SUM(due_date < ?),0) AS overdue FROM invoices WHERE company_id = ? AND status = 'Unpaid'",[$today,$companyId]);
-$focus = db_rows($db,"SELECT t.id, t.title, t.due_date, t.priority, t.status, p.projectName FROM tasks t LEFT JOIN projects p ON " . task_project_join() . " WHERE t.company_id = ? AND t.status != 'completed' ORDER BY t.due_date IS NULL, t.due_date, t.id LIMIT 6",[$companyId]);
-$projects = db_rows($db,"SELECT id, projectName, status, endDate FROM projects WHERE company_id = ? AND status != 'completed' ORDER BY endDate IS NULL, endDate, id DESC LIMIT 4",[$companyId]);
+$focus = db_rows($db,"SELECT t.id, t.title, t.due_date, t.priority, t.status, p.projectName FROM tasks t LEFT JOIN projects p ON " . task_project_join() . " WHERE t.company_id = ? AND t.archived_at IS NULL AND t.status != 'completed' ORDER BY t.due_date IS NULL, t.due_date, t.id LIMIT 6",[$companyId]);
+$projects = db_rows($db,"SELECT id, projectName, status, endDate FROM projects WHERE company_id = ? AND archived_at IS NULL AND status != 'completed' ORDER BY endDate IS NULL, endDate, id DESC LIMIT 4",[$companyId]);
 $progress = project_task_progress($db,$companyId);
 $upcoming = [];
 foreach (db_rows($db,'SELECT event_id, event_name, start_datetime, end_datetime, timezone, event_type, meetup_venue FROM events WHERE company_id = ? AND event_date BETWEEN ? AND ? ORDER BY event_date, start_datetime LIMIT 40',[$companyId,date('Y-m-d',strtotime('-1 day')),date('Y-m-d',strtotime('+30 days'))]) as $event) {

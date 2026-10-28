@@ -117,6 +117,28 @@ if __name__ == '__main__':
         expect(manager.request('/api/records.php?module=projects')[0] == 200,'Manager receives explicit view grant')
         expect(manager.request('/api/records.php?module=projects',{})[0] == 403,'Manager view grant cannot mutate')
         grant(admin,'manager',manager_id,{})
+        employee_row = next(x for x in rows(admin,'employees') if x['id'] == employee_id)
+        task = rows(admin,'tasks')[0]
+        task_form, _ = admin.form('/users/admin/workspace.php?module=tasks&action=new')
+        task_payload = {'csrf_token':task_form,'title':'Task-query scope regression','project_id':task['project_id'],'due_date':'2026-11-20','priority':'high','status':'pending','assignee':employee_id}
+        code, body, _ = admin.request('/api/records.php?module=tasks',task_payload)
+        expect(code == 201,'Create synthetic task for query-scope checks')
+        task_id = json.loads(body)['id']
+        query_path = f'/users/admin/query.php?action=new&task={task_id}&subject=employee:{employee_id}'
+        expect(manager.request(query_path,api=False)[0] == 403,'Manager without task access cannot view task facts for a query')
+        grant(admin,'manager',manager_id,{'tasks':'view'})
+        code, form, _ = manager.request(query_path,api=False)
+        expect(code == 200 and 'About a task' in form,'Manager with task access can query an assigned direct report about their task')
+        employee_form, _ = admin.form('/users/admin/workspace.php?module=employees&action=new')
+        other_email = 'query-scope-' + uuid.uuid4().hex + '@example.test'
+        other_payload = {'csrf_token':employee_form,'first_name':'Query','last_name':'Scope','email':other_email,'hire_date':'2026-10-27','job_title':'Synthetic test','department_id':employee_row['department_id'],'manager_id':manager_id}
+        code, body, _ = admin.request('/api/records.php?module=employees',other_payload)
+        expect(code == 201,'Create second synthetic direct report for query-scope checks')
+        other_employee_id = json.loads(body)['id']
+        csrf = re.search(r'name="csrf_token" value="([a-f0-9]+)"',form).group(1)
+        mismatched_query = {'csrf_token':csrf,'action':'issue','task_id':task_id,'subjects[]':'employee:'+str(other_employee_id),'title':'Task assignee scope check','message':'Please explain this task.','respond_minutes':'10'}
+        expect(manager.request('/users/admin/query.php',mismatched_query)[0] == 403,'Manager cannot attach another direct report to a task assigned to someone else')
+        grant(admin,'manager',manager_id,{})
         teams = rows(admin,'teams')
         for route in ['get_team_data.php','getteamdata.php']:
             expect(beta.request('/users/admin/'+route+'?team_id='+str(teams[0]['id']))[0] == 404,'Legacy team lookup isolates company: '+route)

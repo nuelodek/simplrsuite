@@ -20,6 +20,31 @@ $files = db_rows($db,'SELECT id,original_name,size_bytes,media_type,created_at F
     if ($type === 'money' && $value !== '' && $value !== null) $value = ($settings['currency'] ?: 'Currency unspecified') . ' ' . number_format((float)$value,2);
 ?><div<?= $type === 'textarea' ? ' class="wide"' : '' ?>><dt><?= e($field['label']) ?></dt><dd<?= $type === 'textarea' ? ' class="rich-text"' : '' ?>><?= $type === 'textarea' && trim((string)$value) !== '' ? rich_text_html((string)$value) : e($value === '' || $value === null ? 'Not provided' : $value) ?></dd></div><?php endforeach; ?>
 </dl></div></section>
+<?php if ($key === 'tasks'):
+    require_once __DIR__ . '/discipline.php';
+    $viewer = viewer_identity($user);
+    [$queryScope,$queryParams] = discipline_scope($viewer,'q');
+    $taskQueries = db_rows($db,"SELECT q.id,q.reference,q.title,q.status,q.created_at,q.subject_role,q.subject_id FROM task_queries q WHERE q.task_id = ? AND $queryScope ORDER BY q.id DESC LIMIT 10",[$id,...$queryParams]);
+    $assigneeId = 0;
+    if (trim((string)($record['assignee'] ?? '')) !== '') {
+        $assignee = trim((string)$record['assignee']);
+        $assigneeId = (int)(db_one($db,'SELECT id FROM employees WHERE company_id = ? AND (id = ? OR unique_id = ?) LIMIT 1',[$companyId,ctype_digit($assignee) ? (int)$assignee : 0,$assignee])['id'] ?? 0);
+    }
+    $canQueryAssignee = $assigneeId > 0 && can_issue_query($db,$viewer,'employee',$assigneeId);
+?>
+<section class="panel"><div class="panel-head"><h2>Queries about this task</h2><?php if ($canQueryAssignee): ?><a class="button small" href="/users/admin/query.php?action=new&amp;task=<?= $id ?>&amp;subject=employee:<?= $assigneeId ?>"><?= icon('flag') ?> Query assignee</a><?php endif; ?></div>
+<?php if ($taskQueries): ?><ul class="query-list"><?php foreach ($taskQueries as $taskQuery): ?><li><span class="query-ref"><?= e($taskQuery['reference']) ?></span><div class="query-main"><a href="<?= e(query_url((int)$taskQuery['id'])) ?>"><?= e($taskQuery['title']) ?></a><small><?= e(date('j M Y',strtotime($taskQuery['created_at'] . ' UTC'))) ?></small></div><span class="badge <?= e(stage_class($taskQuery['status'])) ?>"><?= e(query_statuses()[$taskQuery['status']] ?? $taskQuery['status']) ?></span></li><?php endforeach; ?></ul><?php else: ?><div class="panel-body"><p class="subtle">No queries are recorded about this task.</p></div><?php endif; ?></section>
+<?php endif; ?>
+<?php if ($key === 'projects'):
+    require_once __DIR__ . '/discipline.php';
+    $viewer = viewer_identity($user);
+    [$queryScope,$queryParams] = discipline_scope($viewer,'q');
+    $projectQueries = db_rows($db,"SELECT q.id,q.reference,q.title,q.status,q.created_at FROM task_queries q WHERE q.project_id = ? AND $queryScope ORDER BY q.id DESC LIMIT 20",[$id,...$queryParams]);
+    $projectCandidates = can_manage_project_queries($db,$viewer,(int)$id) ? project_query_candidates($db,$viewer,(int)$id) : [];
+?>
+<section class="panel"><div class="panel-head"><h2>Queries about this project</h2><?php if ($projectCandidates): ?><a class="button small" href="/users/admin/query.php?action=new&amp;project=<?= $id ?>"><?= icon('flag') ?> Query project team</a><?php endif; ?></div>
+<?php if ($projectQueries): ?><ul class="query-list"><?php foreach ($projectQueries as $projectQuery): ?><li><span class="query-ref"><?= e($projectQuery['reference']) ?></span><div class="query-main"><a href="<?= e(query_url((int)$projectQuery['id'])) ?>"><?= e($projectQuery['title']) ?></a><small><?= e(date('j M Y',strtotime($projectQuery['created_at'] . ' UTC'))) ?></small></div><span class="badge <?= e(stage_class($projectQuery['status'])) ?>"><?= e(query_statuses()[$projectQuery['status']] ?? $projectQuery['status']) ?></span></li><?php endforeach; ?></ul><?php else: ?><div class="panel-body"><p class="subtle">No queries are recorded about this project.</p></div><?php endif; ?></section>
+<?php endif; ?>
 <?php if ($key === 'projects'):
     $milestoneStatus = trim((string)($record['milestoneStatus'] ?? ''));
     $hasMilestone = (bool)array_filter(['milestoneName','milestoneDate','milestoneDescription'],fn($name)=>trim((string)($record[$name] ?? '')) !== '')

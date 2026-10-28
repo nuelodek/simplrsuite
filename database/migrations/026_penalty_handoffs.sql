@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `penalty_handoffs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id` INT NOT NULL,
+  `penalty_id` BIGINT UNSIGNED NOT NULL,
+  `handoff_function` VARCHAR(20) NOT NULL,
+  `assignee_role` VARCHAR(20) NOT NULL,
+  `assignee_id` INT NOT NULL,
+  `assigned_by_role` VARCHAR(20) NOT NULL,
+  `assigned_by_id` INT NOT NULL,
+  `note` VARCHAR(1000) NOT NULL DEFAULT '',
+  `status` VARCHAR(20) NOT NULL DEFAULT 'pending',
+  `completed_by_role` VARCHAR(20) NULL DEFAULT NULL,
+  `completed_by_id` INT NULL DEFAULT NULL,
+  `completed_at` DATETIME NULL DEFAULT NULL,
+  `completion_note` VARCHAR(1000) NOT NULL DEFAULT '',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `penalty_handoffs_current` (`company_id`,`penalty_id`,`status`,`id`),
+  KEY `penalty_handoffs_assignee` (`company_id`,`assignee_role`,`assignee_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

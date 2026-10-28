@@ -6,7 +6,7 @@ ini_set('display_errors', 1);
 
 // DuploPay API Configuration
 $base_url = 'https://api.duplopg.com/api/v2';
-$secret_key = 'sk_test_w3dgzflef8b7prtnz6rbwob3x9yqg0lq86xlofo';
+$secret_key = '';
 $public_key = 'pk_test_sc8f7xgps3k5azfsmaybfjwbm1izpk4o1p97hr';
 
 // Function to make API requests

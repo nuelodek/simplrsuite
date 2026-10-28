@@ -2,9 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
 
-function task_project_join(): string {
+function task_project_join(bool $includeArchivedProject = false): string {
     // Prefer a real unique ID; accept historical numeric IDs only if unambiguous.
-    return '(p.unique_id = t.project_id OR (BINARY t.project_id = CAST(p.id AS BINARY) AND NOT EXISTS (SELECT 1 FROM projects canonical WHERE canonical.company_id = p.company_id AND canonical.unique_id = t.project_id))) AND p.company_id = t.company_id';
+    return '(BINARY p.unique_id = BINARY t.project_id OR (BINARY t.project_id = CAST(p.id AS BINARY) AND NOT EXISTS (SELECT 1 FROM projects canonical WHERE canonical.company_id = p.company_id AND BINARY canonical.unique_id = BINARY t.project_id))) AND p.company_id = t.company_id' . ($includeArchivedProject ? '' : ' AND p.archived_at IS NULL');
 }
 
 function staff_accounts(mysqli $db, string $role, string $email, string $company = ''): array {
@@ -12,10 +12,10 @@ function staff_accounts(mysqli $db, string $role, string $email, string $company
     $companyFilter = $company !== '' ? ' AND a.company_id = ?' : '';
     if ($company !== '') $params[] = $company;
     if ($role === 'employee') {
-        return db_rows($db, "SELECT a.id AS auth_id, a.password, a.email, e.*, u.company_name FROM employees_auth a JOIN employees e ON e.company_id = a.company_id AND e.email = a.email AND (a.employee_id = e.unique_id OR a.employee_id IS NULL OR a.employee_id = '') JOIN users u ON u.company_id = e.company_id AND u.status = 'Verified' WHERE a.email = ? $companyFilter", $params);
+        return db_rows($db, "SELECT a.id AS auth_id, a.password, a.email, e.*, u.company_name FROM employees_auth a JOIN employees e ON e.company_id = a.company_id AND e.email = a.email AND e.archived_at IS NULL AND (a.employee_id = e.unique_id OR a.employee_id IS NULL OR a.employee_id = '') JOIN users u ON u.company_id = e.company_id AND u.status = 'Verified' WHERE a.email = ? $companyFilter", $params);
     }
     if ($role === 'manager') {
-        return db_rows($db, "SELECT a.id AS auth_id, a.password, a.manager_email AS email, m.*, u.company_name FROM manager_auth a JOIN managers m ON m.company_id = a.company_id AND m.manager_email = a.manager_email AND (a.manager_id = m.unique_id OR BINARY a.manager_id = CAST(m.id AS BINARY) OR a.manager_id IS NULL OR a.manager_id = '') JOIN users u ON u.company_id = m.company_id AND u.status = 'Verified' WHERE a.manager_email = ? AND m.status NOT IN ('suspended','disabled','inactive') $companyFilter", $params);
+        return db_rows($db, "SELECT a.id AS auth_id, a.password, a.manager_email AS email, m.*, u.company_name FROM manager_auth a JOIN managers m ON m.company_id = a.company_id AND m.manager_email = a.manager_email AND m.archived_at IS NULL AND (a.manager_id = m.unique_id OR BINARY a.manager_id = CAST(m.id AS BINARY) OR a.manager_id IS NULL OR a.manager_id = '') JOIN users u ON u.company_id = m.company_id AND u.status = 'Verified' WHERE a.manager_email = ? AND m.status NOT IN ('suspended','disabled','inactive') $companyFilter", $params);
     }
     throw new LogicException('Unsupported staff role');
 }

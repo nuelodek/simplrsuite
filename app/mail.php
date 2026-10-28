@@ -6,6 +6,14 @@ function mail_ready(): bool {
     if (config('APP_ENV') === 'local' && config('MAIL_TRANSPORT') === 'log') return true;
     return config('MAIL_TRANSPORT', 'smtp') === 'smtp' && config('SMTP_HOST') !== '' && filter_var(config('MAIL_FROM_ADDRESS'), FILTER_VALIDATE_EMAIL) && filter_var(config('APP_URL'), FILTER_VALIDATE_URL) && !str_contains(config('APP_URL'), '.example');
 }
+function safe_mail_error(string $message, string $recipient): string {
+    foreach ([$recipient,config('SMTP_USERNAME'),config('SMTP_PASSWORD'),config('MAIL_FROM_ADDRESS')] as $sensitive) {
+        if ($sensitive !== '') $message = str_ireplace($sensitive,'[redacted]',$message);
+    }
+    $message = preg_replace('/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i','[email]',$message) ?? '';
+    $message = preg_replace('/[\r\n\t]+/',' ',$message) ?? '';
+    return mb_substr(trim($message),0,500);
+}
 function send_account_mail(string $recipient, string $subject, string $text): bool {
     if (!mail_ready()) return false;
     if (config('APP_ENV') === 'local' && config('MAIL_TRANSPORT') === 'log') {
@@ -16,8 +24,8 @@ function send_account_mail(string $recipient, string $subject, string $text): bo
     require_once SIMPLR_ROOT . '/PHPMailer-master/src/Exception.php';
     require_once SIMPLR_ROOT . '/PHPMailer-master/src/PHPMailer.php';
     require_once SIMPLR_ROOT . '/PHPMailer-master/src/SMTP.php';
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
         $mail->isSMTP();
         $mail->Host = config('SMTP_HOST');
         $mail->Port = (int)config('SMTP_PORT', '587');
@@ -32,8 +40,9 @@ function send_account_mail(string $recipient, string $subject, string $text): bo
         $mail->Subject = $subject;
         $mail->Body = $text;
         return $mail->send();
-    } catch (Throwable $error) {
-        error_log('Simplr: account email delivery failed (' . get_class($error) . ')');
+    } catch (PHPMailer\PHPMailer\Exception $error) {
+        $detail = safe_mail_error($mail->ErrorInfo ?: $error->getMessage(),$recipient);
+        error_log('Simplr: account email delivery failed (' . get_class($error) . '): ' . $detail);
         return false;
     }
 }

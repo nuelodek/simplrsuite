@@ -1,8 +1,8 @@
 # Use PHP with Apache
 FROM php:8.2-apache
 
-RUN apt-get update && apt-get install -y --no-install-recommends libonig-dev libcurl4-openssl-dev \
-    && docker-php-ext-install mysqli pdo_mysql mbstring curl \
+RUN apt-get update && apt-get install -y --no-install-recommends libonig-dev libcurl4-openssl-dev libzip-dev \
+    && docker-php-ext-install mysqli pdo_mysql mbstring curl zip \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 

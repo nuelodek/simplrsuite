@@ -1,5 +1,131 @@
 # Simplr Suite overnight continuation
 
+## Evening continuation — production-readiness items (27 October 2026, Claude)
+
+Requested: pick the `requirements.html` items that can be solved now, record them
+so other agents do not collide, and keep the server running. Claims are in
+`work/agent-claims.md`; Codex was working at the same time (privacy page, env
+examples, `scripts/access_smoke_test.py`) and its notes are in `work/handoff.txt`.
+
+- **Tenant isolation (CRITICAL item).** New `scripts/tenant_isolation_test.py`:
+  two synthetic companies plus a view-only employee, a manager with no grants and
+  an anonymous visitor. It covers search, the Files library, downloads and
+  removal, record views, the records API (list, update, board move, archive), CSV
+  export (including spreadsheet-formula neutralising), alerts, queries, accounting,
+  dashboards, calendar and activity. Staff grants are restored afterwards. No
+  cross-company leak was found in these surfaces.
+- **Open redirect fixed.** `users/admin/notifications.php` accepted
+  `return_to=/\evil.example`; browsers treat `/\` like `//`, so the visitor left the
+  site. New `local_path()` in `app/bootstrap.php` rejects `//`, any backslash and
+  control characters; the alert-open redirect uses it too.
+- **GitHub idempotency.** Found by reading the code: the scheduled job and a Sync
+  click could both create a task for the same new issue. The second insert then
+  failed on the unique key, leaving a duplicate task. `github_sync_issues()` now
+  holds a per-link MySQL lock, so a second sync waits and finds the existing task.
+  The cron job counts a busy link as `busy` rather than an error.
+  `scripts/github_smoke_test.py` now runs four syncs at once (exactly one task per
+  issue) and has a second company try to sync, unlink, disable auto-sync,
+  disconnect, map people, link and view company A's GitHub setup (all refused,
+  state unchanged).
+- **Scheduler monitoring.** Migration `031_scheduler_runs.sql`, `app/jobs.php`
+  (`job_begin` lock plus heartbeat, `job_finish`, crash recorded by exception class
+  only), `scripts/scheduler_status.php` (exit 1 when a job is never/late/stuck/
+  failed, `--json`, `--quiet` for cron alerts). Both jobs use it;
+  `jobs/notifications.php` gained only the two heartbeat lines, so overlapping
+  minute runs now skip. `jobs/github-sync.php` stops taking new repositories a
+  minute before its next run. Runbook with exact cron lines, states and staging
+  steps: `deploy/scheduler.md`. The README listed `*/5` for notifications in one
+  place and every minute in another; it now says every minute.
+- **Hygiene.** `.playwright-mcp/` (Playwright MCP captures) is ignored; nothing was
+  deleted. PHP lint on every changed/untracked PHP file and `git diff --check` are
+  clean.
+
+Verification (isolated local DB, `APP_ENV=local`, `MAIL_TRANSPORT=log`, GitHub stub
+only): tenant isolation 121/121 (twice), GitHub stub journey 117/117 (was 92),
+consolidation smoke 388/388, preflight local pass, Paystack simulation 56/56,
+Flutterwave simulation 46/46, accounting unit 21/21, rich text 15/15, recruiting
+policy 14/14, marketing 40/40, `node --check` on suite/richtext/accounting JS.
+Scheduler: never → ok → overlap skipped → crash recorded as failed → recovered.
+Summaries are in `work/test-results/claude-regression-*.json`.
+
+Running two agents' suites at once exhausts the app's own login rate limits on the
+shared synthetic fixtures (10 per account per 15 minutes); failures showing
+"fixture login" are that, not product defects. Rerun one agent at a time, or wait
+the window out. `access_smoke_test.py` also needs the Apache helper on 8001
+(`httpd.exe -f .local/apache-test.conf -DFOREGROUND`).
+
+Second batch (22:30–22:45):
+
+- **Dependencies:** `docs/dependencies.md`. The Composer tree exists only for Sentry,
+  which no reachable page loads. PHPMailer 6.9.1 (LGPL-2.1) is the only bundled
+  library in use; `PHP-v3-master/` (Flutterwave SDK) and the empty
+  `mediawiki-php-excimer/` are unused. Blocked legacy pages load pdf.js 2.11.338
+  (CVE-2024-4367), unpinned Unit components, Google Tag Manager and old jQuery and
+  socket.io. `users/admin/sentryinitialize.php` hardcodes a Sentry DSN; add it to the
+  owner's rotation list.
+- **Container fix:** `Dockerfile` did not install `zip`, so every DOCX/XLSX/PPTX
+  upload would be rejected in the container. It now installs `libzip-dev` and `zip`;
+  `scripts/preflight.php` checks `zip` and `dom` (local preflight 15/15). The image
+  has not been built here.
+- **Launch scope:** `docs/launch-scope.md`, an available/limited/not-built table for
+  owner approval. The only misleading copy found: the integrations page said payroll
+  and banking "need a connected provider before they can be used". It now says
+  Simplr does not run payroll, payouts or bank balances yet.
+- **Data inventory:** `docs/data-inventory.md`, covering personal data per table, who
+  sees it, what deletes it, legacy tables (including bank account numbers) and gaps:
+  no retention job, no export or deletion requests, withdrawn resumes are kept.
+  Owner questions are listed.
+- **Release runbook:** `deploy/release.md` covers roles, staging rehearsal, backup
+  (database, storage and APP_KEY), migrate, checks, rollback vs forward fix and sign-off.
+- `requirements.html` now carries statuses and a one-line evidence note on every item
+  touched today (they are the file's defaults, so every viewer sees them).
+
+Third batch (23:00–23:40):
+
+- **Route audit:** `scripts/route_audit_test.py` checks all 163 manifest routes,
+  statically (sign-in helper, guarded legacy adapter, redirect stub, or reviewed
+  public list with reasons) and over HTTP (anonymous GET, anonymous and signed-in
+  POST without CSRF). 980/980. Matrix in `work/test-results/route-audit.json`. New
+  routes must be added to the review lists or carry a guard, or the test fails.
+- **Session hardening:** `scripts/session_hardening_test.py` 23/23 covers owner
+  sign-in and reset enumeration, rejection of planted session IDs, logout revoking a
+  copied cookie, GET logout doing nothing, HttpOnly/SameSite, and Secure when APP_URL
+  is HTTPS (throwaway server on port 8095).
+- **Migrations:** `scripts/migration_matrix_test.php` works on disposable
+  `simplr_dev_mig_*` databases only (26 s per build; the default samples 17 of 32
+  baselines, `--all` runs every one). It covers clean install, a rerun that changes
+  nothing, upgrade from each sampled baseline with synthetic rows kept and the final
+  schema identical to a clean install, the 002 duplicate-email stop, and a list of
+  migrations that fail when run twice.
+- **Secrets:** a scan by key type (values never printed) found a Paystack **live**
+  secret key inside browser JavaScript in `users/admin/createbankaccount.php`, plus
+  Paystack test keys, Unit tokens, a Sentry DSN and a mailbox password in dead legacy
+  files and history. Values were blanked in the 8 current files. None matches the
+  currently configured SMTP or payment settings. Rotation steps are in
+  `docs/owner-actions.md`, the single owner checklist (linked from `requirements.html`).
+- **Mobile dashboard:** the consolidation browser suite failed "Dashboard fits mobile
+  viewport" (402px at 390px). Long one-line task titles set the grid track's minimum.
+  Appended `.dashboard-columns > * { min-width: 0; }`; suite 55/55 on fresh fixtures.
+- **Fixture order matters:** `consolidation_browser_test.cjs` needs a fresh alpha
+  (run `consolidation_smoke_test.py` first). `workspace_browser_test.cjs` needs
+  access, attachments and help suites rerun after any fixture refresh.
+  `paystack_http_test.py` needs `paystack_test.php` first and the payment router on 8002.
+  The isolation test now creates its chart in company B so alpha stays empty for the
+  browser suite.
+
+Final verification (isolated local DB, log mail, all passing): consolidation 388, access
+234, attachments 54, isolation 121, route audit 980, session 23, recruiting 149, help 35,
+operations 73, email scope 58, GitHub 113, marketing 40, Paystack 56, Flutterwave 46,
+payment HTTP 40, accounting 21, rich text 15, recruiting policy 14, browser suites
+consolidation 55, recruiting 35, workspace 83, migration matrix 74 (514 s). Migrations
+that fail if replayed by hand: 002, 009, 013, 014, 015, 018, 019, 024, 025, 027, 028, 029,
+030 (duplicate column/index); `migrate.php` never replays them, so only manual replays
+are affected. Disposable databases were all dropped.
+
+Not done here (owner, hosting or other agents): staff toolkit grants, talent journey,
+promotions, payments sandbox, privacy/legal facts, hosting, backups, accessibility
+review, capacity budgets. Nothing committed.
+
 ## Night continuation — editor, files, GitHub (26–27 October 2026)
 
 Requested: a WYSIWYG editor, a place to upload and download files, less archaic
@@ -705,3 +831,207 @@ Preserve all completed work, test evidence, user files, and source history. No
 routine approval questions. Report material new failures or real external
 dependencies. Morning report must distinguish local verification from production
 readiness and provider activation.
+
+## Accessibility continuation — 28 Oct 2026 (Copilot)
+
+- Local-only Playwright spot check covered `/`, the business/talent/work landing
+  pages, the privacy notice, admin and employee sign-in, and password recovery.
+  All 8 routes returned HTTP 200 and had one main landmark and one H1. The check
+  found no unnamed links/controls or images missing `alt`; document width matched
+  the viewport at 320px, 390px and 1280px.
+- Keyboard tab checks on admin sign-in, employee sign-in and recovery showed
+  visible focus and a sensible sequence. Sign-in field outlines were only
+  2px pale green (`#dceadf`) against white. Updated the auth form focus outline
+  in `public/styles/suite.css` to a 3px contrasting green ring.
+- This is a partial public/auth accessibility pass, not completion of the
+  requirement. Authenticated workspace journeys, calendar dialog, people tree,
+  zoom and a full contrast review remain. `quality-accessibility` is now
+  `in-progress`, not verified.
+- Corrected `privacy-owner-input` back to `blocked`: the supplied business and
+  public contact details are configured, but legal approval and CAC status
+  confirmation required by the item are still outstanding. The prior
+  `verified` state was too broad.
+- No application login was performed; no database, email, payment, external
+  service or deployment actions were taken.
+
+## Accessibility continuation — authenticated narrow-screen checks (28 Oct 2026, Copilot)
+
+- Used the local app at `127.0.0.1:8000` and the synthetic owner fixture; browser
+  requests to non-local hosts were blocked. No business records were changed.
+- Calendar keyboard check passed: Enter opened the day dialog, the dialog had an
+  accessible name, focus moved inside, Escape closed it, and focus returned to
+  the day button. Visible organization-chart controls had accessible names.
+- At 320px, both authenticated pages initially overflowed horizontally by 44px
+  because the compact topbar controls retained their wider-workspace layout.
+  Added a <=364px topbar padding/gap/workspace-width adjustment in
+  `public/styles/suite.css`. Calendar and organization pages then fit at 320,
+  360, 390 and 1280px. Both authenticated pages also fit a 640×422 CSS viewport,
+  equivalent to 200% desktop zoom from 1280×844.
+- `requirements.html` records the new evidence but keeps `quality-accessibility`
+  in progress. Full authenticated workflow coverage, a full contrast review and
+  remaining zoom checks have not been completed. Next safe scope: continue local
+  keyboard and error-feedback checks on synthetic staff workspace/form routes.
+- Sign-in affected only local synthetic authentication/session/rate-limit state;
+  no email, payments, provider calls or deployment actions occurred.
+- A later boundary probe found 1–3px overflow at 361–363px with the initial
+  360px breakpoint. The CSS breakpoint was extended through 364px; the attempted
+  follow-up login was throttled, so that boundary adjustment still needs a
+  browser recheck after the local fixture's cooldown. Do not clear the rate limit
+  to force the check.
+
+## Local checks and throttle-safe follow-up — 28 Oct 2026 (Copilot)
+
+- `php scripts/preflight.php`: **15/15** local read-only checks passed, including
+  database connectivity, applied migrations, route targets, private storage,
+  required extensions, and log-mail safety. The script explicitly excludes
+  production DNS/HTTPS, SMTP delivery, provider activation, backups, and legal
+  compliance.
+- Non-login unit suites passed: rich text **15**, accounting **21**, recruiting
+  policy **14/14**. `git diff --check` passed for the accessibility/tracker/handoff
+  files; only the existing LF-to-CRLF warning appeared for `suite.css`.
+- Re-attempted the authenticated narrow-width check once after the earlier
+  cooldown. The synthetic login was still throttled, so no page measurements
+  were obtained. No further login attempt was made, and no rate-limit rows were
+  cleared or altered.
+- After the natural cooldown, one delayed local-only synthetic owner login
+  succeeded. Calendar and organization pages returned HTTP 200 and matched
+  document width to viewport width at 320, 360, 361, 362, 363, 364, 365 and
+  390px. This verifies the previously open 361–364px breakpoint. No rate-limit
+  rows were cleared or altered.
+- The <=364px topbar rule remains in `public/styles/suite.css`. Keep
+  `quality-accessibility` in progress because the broader workflow, contrast,
+  and browser zoom review is not complete.
+- A local-only contrast probe identified shared muted text at about 4.27:1 on the
+  landing background. Darkened `--muted` from `#6f7b76` to `#66736e`; browser
+  checks now measure 4.81:1 on the landing background and 4.95:1 on white.
+  Public, privacy, admin sign-in and employee sign-in pages still fit at 320px.
+  This improves the shared token but does not replace a full contrast review.
+- Extended contrast adjustments to low-contrast small text in the public preview
+  and workflow mockups, while retaining a light brand suffix on the dark auth
+  panel. The browser check measured foreground/background contrast for 69 rendered
+  label instances across 7 public/privacy/auth routes; all passed 4.5:1 normal
+  text or 3:1 large text. A separate visible-text scan found no remaining below-
+  target text color pairs on those seven routes. This is not a full application-
+  wide contrast audit; backgrounds with imagery/gradients and authenticated
+  screens still require review.
+- Updated `scripts/migration_matrix_test.php` so schema comparisons also include
+  foreign-key mappings and update/delete actions, then ran
+  `php scripts/migration_matrix_test.php --all` against generated
+  `simplr_dev_mig_*` databases: **134/134** checks passed in 939 seconds. Clean
+  install/no-op and all **32/32** synthetic baselines passed; the synthetic
+  owner, employee, project and task rows survived and resulting columns,
+  indexes, foreign keys and actions matched the clean-install schema. The
+  duplicate-email migration stopped without deleting rows. The report lists 19
+  migrations safe to rerun and 13 that fail if replayed. That matrix did not
+  inject partial-DDL failures; a separate migration-027 recovery drill is
+  recorded below. No historical or production database was accessed.
+- Added `scripts/migration_failure_recovery_test.php` to inject the known
+  migration-027 duplicate-column partial-failure case in a disposable
+  `simplr_dev_recovery_*` database. It passed **9/9** checks: the manager-link
+  ALTER/backfill persisted, the runner did not record the incomplete migration,
+  the missing team index was applied, and only after schema verification was
+  migration 027 recorded so the supported runner could finish. No non-synthetic
+  database was touched.
+- Corrected `deploy/release.md`: after manual partial-migration repair, the
+  runner cannot record the file automatically. The documented recovery now
+  requires statement/data inspection, migration-specific repair, schema
+  verification, then an explicitly reviewed marker insert or backup restore.
+  The new synthetic test is documented in `README.md`. This validates one
+  specific failure mode, not all partial-DDL cases; `data-upgrade` remains in
+  progress.
+- A one-shot delayed employee accessibility follow-up failed in the Playwright
+  DOM-inspection expression with `TypeError: Cannot read properties of undefined
+  (reading 'length')`. It produced no employee-control findings; an earlier
+  staff-page check's three possible unnamed controls remain unconfirmed. No
+  follow-up login was attempted; fix the inspection expression before any
+  future authenticated check.
+
+## Synthetic role-transition checks — 28 Oct 2026 (Copilot)
+
+- Added `scripts/role_transition_test.php`. It refuses non-local or non-log-mail
+  configuration, creates and drops only a generated `simplr_dev_roles_*`
+  database, installs the current schema/migrations, and uses synthetic records.
+- `php scripts/role_transition_test.php` passed **21/21** checks. Evidence covers
+  linking an existing employee to a pending manager record, department-head
+  assignment, audit event creation, manager demotion while preserving the
+  employee, employee-role restoration, direct-report/department/project manager
+  reassignment, invalidating a pending manager invitation, organization chart
+  leadership, and rejection of self-replacement with dependent records left
+  unchanged. The test calls transition helpers directly and sends no email.
+- `identity-roles` is now **in progress**, not verified. The UI promotion +
+  invitation retry path and full workspace-facing journey still need synthetic
+  coverage.
+
+## Consolidation smoke rerun — 28 Oct 2026 (Copilot)
+
+- Ran `python scripts/consolidation_smoke_test.py` with local app configuration
+  and log mail: core **197/197**, talent **268/268**, and consolidated
+  recovery/consolidation **388/388** checks passed. No external email or provider
+  traffic was used.
+- This is targeted current evidence, not the complete release gate. Access,
+  attachment, recruiting, tenant-isolation, GitHub, payment-mock, browser, and
+  other documented suites have not all been rerun against the latest worktree;
+  `quality-full-suite` remains in progress.
+
+- Also re-ran `php scripts/preflight.php`: **15/15** local read-only checks
+  passed. The focused PHP suites passed rich text **15/15**, accounting **21/21**,
+  and recruiting policy **14/14**. These confirm local prerequisites and focused
+  unit behavior only; they do not establish production readiness.
+- `python scripts/marketing_smoke_test.py` passed **40/40** local public-route
+  checks, including audience-specific page selection, canonical links, correct
+  account destinations, rejection of a hostile `Host` value, and environment-
+  shaped audience-link generation. This does not resolve or validate live DNS,
+  TLS, or deployed origins.
+- After waiting out the local authentication cooldown, ran
+  `python scripts/access_smoke_test.py` once: **234/234** checks passed. It
+  covered synthetic owner/employee/manager grants, view/edit/revocation,
+  tenant boundaries, CSRF, stale grant forms, legacy write paths, and blocked
+  routes on local ports. The test deliberately leaves a synthetic view-only
+  employee grant for browser checks and writes `.local/access-browser-fixture.json`.
+  No non-local request, email, or payment traffic was made. Do not retry login
+  suites until another natural cooldown has elapsed.
+- After a further natural cooldown, ran `python
+  scripts/attachments_smoke_test.py` once: **54/54** checks passed using only
+  synthetic files and records. Coverage includes upload validation, forced
+  private downloads, cross-company/view-only grant behavior, storage web denial,
+  and scoped removal; the run removed its own test attachments. No malware or
+  real customer files were used. Antivirus scanning, owner-approved retention,
+  and production storage/backup ownership remain undecided, so
+  `product-files` remains blocked.
+- No new owner decisions or evidence were available for CAC status/legal
+  approval, production origins, support coverage, backup objectives, launch
+  scope, or attachment scanning/retention. Do not infer approval or mark those
+  owner-dependent gates verified; preserve their existing blocked/pending
+  status until evidence is supplied.
+
+## Scheduler-monitoring tracker reconciliation — 28 Oct 2026 (Copilot)
+
+- The monitoring item had remained `pending` despite the existing implementation
+  and isolated failure/recovery evidence. Updated it to `in-progress`, not
+  `verified`, and added the evidence and remaining gates to `requirements.html`.
+- Reviewed `deploy/scheduler.md` and `scripts/scheduler_status.php`; ran the
+  status command read-only against the local development database. It exited 1
+  and reported both jobs `late`, consistent with the paused local scheduler and
+  the documented alert behavior. No jobs were started.
+- Staging alert delivery, a named on-call/alert recipient, monitoring for SMTP,
+  provider, storage and backup failures, error-tracking choice, and an incident
+  exercise remain unverified. No production host, provider, external alert or
+  scheduled automation was contacted or enabled.
+- Also reconciled the stale `quality-full-suite` note with the current
+  28 Oct results: consolidation 388/388, preflight 15/15, access 234/234,
+  attachments 54/54, marketing 40/40 and recruiting policy 14/14. Kept it
+  in progress because the documented suite set is not complete; the recent
+  authentication checks mean another login suite should wait for natural
+  cooldown.
+- Reconciled `identity-talent` from pending to in progress based on the
+  268/268 talent checks included in the current consolidation run. That synthetic
+  journey covers signup, verification, login/logout, password recovery, profile
+  visibility/withdrawal, escaping and cross-identity protection. Resume upload
+  is explicitly unavailable; browser application journey, employer access
+  constrained to application context, and retention/deletion policy remain open.
+- Re-ran non-login local unit checks: `php scripts/richtext_unit_test.php`
+  **15/15**, `php scripts/accounting_unit_test.php` **21/21**, and
+  `php scripts/recruiting_policy_test.php` **14/14**. `node --check` passed
+  for `scripts/projdashboard.js` and `scripts/messages.js`; scoped
+  `git diff --check` passed. These focused checks do not close the full-suite
+  gate or production-only requirements.

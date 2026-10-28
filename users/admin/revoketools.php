@@ -13,7 +13,7 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 $simplrcompany = "Simplr Business Suite";
-$mailpassword = "3)TiskO2(0W8Iu";
+$mailpassword = "";
 $companyusername = 'business@simplr.com.ng';
 
 // Check if required POST variables are set

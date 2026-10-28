@@ -26,6 +26,11 @@ error_reporting(E_ALL);
 
 function e(mixed $value): string { return htmlspecialchars((string)($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function redirect(string $path): never { header('Location: ' . $path, true, 303); exit; }
+// A same-site path for redirects after an action. Browsers read "/\" like "//", so any
+// backslash or control character falls back too.
+function local_path(string $path, string $fallback): string {
+    return preg_match('#^/(?!/)[^\\\\\x00-\x1f\x7f]*$#D', $path) ? $path : $fallback;
+}
 function wants_json(): bool {
     return str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') || str_starts_with($_SERVER['REQUEST_URI'] ?? '', '/api/');
 }

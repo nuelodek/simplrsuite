@@ -25,6 +25,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
     if ($scope === 'task' && !$taskId) fail('Choose the task this report belongs to.', 422);
     if ($scope === 'project' && !$projectId) fail('Choose the project this report belongs to.', 422);
+    if ($scope === 'task' && !db_one($db,'SELECT id FROM tasks WHERE company_id = ? AND id = ? AND archived_at IS NULL',[$companyId,$taskId])) fail('Choose an active task in your workspace.',422);
+    if ($scope === 'project' && !db_one($db,'SELECT id FROM projects WHERE company_id = ? AND id = ? AND archived_at IS NULL',[$companyId,$projectId])) fail('Choose an active project in your workspace.',422);
     if ($title === '') fail('Give this report a clear title.', 422);
     if ($summary === '') fail('Write a short summary for the report.', 422);
     if ($reportText === '') fail('Add your report narrative or update details.', 422);
@@ -93,8 +95,8 @@ if (isset($_GET['export'])) {
 
 send_due_report_notifications($db);
 
-$projectOptions = db_rows($db, 'SELECT id, projectName FROM projects WHERE company_id = ? ORDER BY projectName ASC', [$companyId]);
-$taskOptions = db_rows($db, 'SELECT id, title, project_id, due_date FROM tasks WHERE company_id = ? ORDER BY due_date DESC, id DESC', [$companyId]);
+$projectOptions = db_rows($db, 'SELECT id, projectName FROM projects WHERE company_id = ? AND archived_at IS NULL ORDER BY projectName ASC', [$companyId]);
+$taskOptions = db_rows($db, 'SELECT t.id, t.title, t.project_id, t.due_date FROM tasks t LEFT JOIN projects p ON ' . task_project_join() . ' WHERE t.company_id = ? AND t.archived_at IS NULL AND (t.project_id IS NULL OR t.project_id = \'\' OR p.id IS NOT NULL) ORDER BY t.due_date DESC, t.id DESC', [$companyId]);
 $reportRows = db_rows($db, 'SELECT pr.*, p.projectName AS project_name, t.title AS task_name FROM project_reports pr LEFT JOIN projects p ON p.id = pr.project_id AND p.company_id = pr.company_id LEFT JOIN tasks t ON t.id = pr.task_id AND t.company_id = pr.company_id WHERE pr.company_id = ? ORDER BY pr.next_due_at DESC, pr.id DESC', [$companyId]);
 
 suite_start('Reports','reports',$user);

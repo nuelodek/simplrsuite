@@ -43,8 +43,8 @@ function visible_modules(mysqli $db, array $user): array {
     return array_intersect_key(assignable_modules(), array_flip(array_column($grants, 'module_key')));
 }
 
-function audit_event(mysqli $db, int $companyId, string $action, string $targetType, string $targetId, array $details = []): void {
-    $role = $_SESSION['auth_role'] ?? '';
-    $actor = match($role) { 'admin'=>$_SESSION['user_id'] ?? 0, 'talent'=>$_SESSION['talent_account_id'] ?? 0, default=>$_SESSION['staff_id'] ?? 0 };
+function audit_event(mysqli $db, int $companyId, string $action, string $targetType, string $targetId, array $details = [], ?string $actorRole = null, ?int $actorId = null): void {
+    $role = $actorRole ?? ($_SESSION['auth_role'] ?? '');
+    $actor = $actorId ?? match($role) { 'admin'=>$_SESSION['user_id'] ?? 0, 'talent'=>$_SESSION['talent_account_id'] ?? 0, default=>$_SESSION['staff_id'] ?? 0 };
     db_run($db, 'INSERT INTO workspace_audit (company_id, actor_role, actor_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?, ?)', [$companyId, $role, $actor, $action, $targetType, $targetId, json_encode($details, JSON_THROW_ON_ERROR)]);
 }

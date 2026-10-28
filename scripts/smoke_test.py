@@ -173,7 +173,7 @@ try:
     for role, staff_id, staff_email in [('employee', employee, 'employee-' + run + '@example.test'), ('manager', manager, 'manager-' + run + '@example.test')]:
         token, _ = alpha.csrf('/users/admin/workspace.php?module=employees')
         code, body, _ = alpha.request('/users/admin/invite.php', {'csrf_token': token, 'role': role, 'staff_id': staff_id})
-        expect(code == 200 and 'Invitation sent.' in body, role + ' invitation writes local test mail')
+        expect(code == 200 and 'The mail server accepted the invitation.' in body, role + ' invitation writes local test mail')
         path = mail_path(staff_email, 'Your Simplr workspace invitation')
         colleague = Client()
         token, _ = colleague.csrf(path)

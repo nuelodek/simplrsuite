@@ -12,27 +12,35 @@ if (!isset($_SESSION['company_id'])) {
 }
 
 // Retrieve project_id from the query parameter
-$projectId = $_GET['project_id'];
+$projectId = is_string($_GET['project_id'] ?? null) ? $_GET['project_id'] : '';
 
 // Fetch project details
-$sql_project = "SELECT projectName, startDate, endDate, status, project_manager_id
-                FROM projects 
-                WHERE unique_id = '$projectId'";
-
-$result_project = $conn->query($sql_project);
-$project = $result_project->fetch_assoc();
+$stmt_project = $conn->prepare("SELECT projectName, startDate, endDate, status, project_manager_id
+                FROM projects
+                WHERE company_id = ? AND unique_id = ? AND archived_at IS NULL");
+$stmt_project->bind_param('is',$_SESSION['company_id'],$projectId);
+$stmt_project->execute();
+$project = $stmt_project->get_result()->fetch_assoc();
+if (!$project) {
+    http_response_code(404);
+    exit('Project not found.');
+}
 
 // Fetch tasks associated with the project
-$sql_tasks = "SELECT id, title, assignee, due_date, priority, status 
-              FROM tasks 
-              WHERE project_id = '$projectId' 
-              ORDER BY due_date ASC";
-
-$result_tasks = $conn->query($sql_tasks);
+$stmt_tasks = $conn->prepare("SELECT id, title, assignee, due_date, priority, status
+              FROM tasks
+              WHERE company_id = ? AND project_id = ? AND archived_at IS NULL
+              ORDER BY due_date ASC");
+$stmt_tasks->bind_param('is',$_SESSION['company_id'],$projectId);
+$stmt_tasks->execute();
+$result_tasks = $stmt_tasks->get_result();
 
 // Fetch employees for the assignee dropdown
-$sql_employees = "SELECT * FROM employees WHERE company_id = '{$_SESSION['company_id']}'";
-$result_employees = $conn->query($sql_employees);
+$sql_employees = "SELECT * FROM employees WHERE company_id = ? AND archived_at IS NULL";
+$stmt_employees = $conn->prepare($sql_employees);
+$stmt_employees->bind_param('i',$_SESSION['company_id']);
+$stmt_employees->execute();
+$result_employees = $stmt_employees->get_result();
 
 // Retrieve employee data and store in an associative array
 $employees = [];
@@ -264,10 +272,12 @@ while ($employee = $result_employees->fetch_assoc()) {
                 <p><i class="fa fa-user-tie"></i> <strong>Team-Lead:</strong>
                     <?php
                     // Fetch project manager name from employees table
-                    $sql_manager = "SELECT first_name, last_name FROM employees WHERE unique_id = '$project[project_manager_id]'";
-                    $result_manager = $conn->query($sql_manager);
+                    $stmt_manager = $conn->prepare("SELECT first_name, last_name FROM employees WHERE company_id = ? AND unique_id = ? AND archived_at IS NULL");
+                    $stmt_manager->bind_param('is',$_SESSION['company_id'],$project['project_manager_id']);
+                    $stmt_manager->execute();
+                    $result_manager = $stmt_manager->get_result();
                     $manager = $result_manager->fetch_assoc();
-                    echo $manager['first_name'] . ' ' . $manager['last_name'];
+                    echo htmlspecialchars(trim(($manager['first_name'] ?? '') . ' ' . ($manager['last_name'] ?? '')));
                     ?>
                 </p>
             </div>

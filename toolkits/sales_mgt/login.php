@@ -11,7 +11,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $stmt = $conn->prepare("SELECT e.password, e.employee_id, e.company_id, u.company_name 
                             FROM employees_auth e 
                             JOIN users u ON e.company_id = u.company_id 
-                            WHERE e.email = ?");
+                            WHERE e.email = ?
+                              AND EXISTS (
+                                  SELECT 1 FROM employees staff
+                                  WHERE staff.company_id = e.company_id
+                                    AND staff.email = e.email
+                                    AND staff.archived_at IS NULL
+                              )");
 
     // Check if the statement was prepared successfully
     if ($stmt === false) {

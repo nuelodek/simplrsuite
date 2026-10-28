@@ -2,12 +2,17 @@
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/view.php';
 require_once __DIR__ . '/../../app/modules.php';
+require_once __DIR__ . '/../../app/archive.php';
 require_once __DIR__ . '/../../app/settings.php';
 require_once __DIR__ . '/../../app/attachments.php';
+require_once __DIR__ . '/../../app/mail.php';
 $db = database(); $user = workspace_user($db); $companyId = (int)$user['company_id'];
 $key = is_string($_GET['module'] ?? null) ? $_GET['module'] : 'projects'; $module = module_config($key);
 $action = is_string($_GET['action'] ?? null) ? $_GET['action'] : 'list';
 if (!in_array($action,['list','view','new','edit'],true)) fail('This page could not be found.',404);
+$peopleModules = ['departments','employees','managers','teams'];
+$isPeopleModule = in_array($key,$peopleModules,true) && ($_SESSION['auth_role'] ?? '') === 'admin';
+$organizationView = $isPeopleModule && $action === 'list' && ($_GET['view'] ?? '') === 'organization';
 $access = require_module_access($db,$user,$key,in_array($action,['new','edit'],true) || ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST');
 $canEdit = $access === 'edit';
 $settings = workspace_settings($db,$companyId);
@@ -15,7 +20,11 @@ $id = filter_var($_GET['id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range
 $record = []; $errors = []; $version = '';
 if (in_array($action,['edit','view'],true)) {
     if (!$id) fail('Choose a record to view.',404);
-    $record = db_one($db,"SELECT * FROM `{$module['table']}` WHERE `{$module['pk']}` = ? AND company_id = ?",[$id,$companyId]);
+    $archiveable = in_array($key,['employees','managers','tasks','projects'],true);
+    $trashRecordView = $archiveable && ($_GET['view'] ?? '') === 'trash';
+    if ($trashRecordView && $action === 'edit') fail('Archived records must be restored before editing.',409);
+    $archiveFilter = $archiveable ? ($trashRecordView ? ' AND archived_at IS NOT NULL' : ' AND archived_at IS NULL') : '';
+    $record = db_one($db,"SELECT * FROM `{$module['table']}` WHERE `{$module['pk']}` = ? AND company_id = ?$archiveFilter",[$id,$companyId]);
     if (!$record) fail('This record could not be found in your workspace.',404);
     if ($key === 'applications' && db_one($db,'SELECT application_id FROM application_submissions WHERE application_id = ? AND company_id = ?',[$id,$companyId])) redirect('/users/admin/application.php?id=' . $id);
     $version = record_version($record);
@@ -23,6 +32,50 @@ if (in_array($action,['edit','view'],true)) {
 }
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     require_post();
+    $managementAction = input('management_action');
+    if (in_array($managementAction,['archive_record','restore_record','purge_record'],true)) {
+        $recordId = filter_var($_POST['record_id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if (!$recordId) fail('Choose a record to update in Trash.',422);
+        $trashAction = ['archive_record'=>'archive','restore_record'=>'restore','purge_record'=>'purge'][$managementAction];
+        change_record_archive($db,$user,$key,(int)$recordId,$trashAction,input('version'));
+        flash(match ($trashAction) {
+            'archive'=>'Moved to Trash. You can restore it later.',
+            'restore'=>'Record restored to the active workspace.',
+            default=>'Archived record permanently deleted.',
+        });
+        redirect('/users/admin/workspace.php?module=' . rawurlencode($key) . ($trashAction === 'archive' ? '' : '&view=trash'));
+    }
+    if (in_array($managementAction,['promote_employee','demote_manager'],true)) {
+        if (($_SESSION['auth_role'] ?? '') !== 'admin') fail('Only the workspace owner can change management roles.',403);
+        $expectedModule = $managementAction === 'promote_employee' ? 'employees' : 'managers';
+        if ($key !== $expectedModule) fail('Open the correct people directory before changing this role.',403);
+        require_module_access($db,$user,$expectedModule,true,true);
+        rate_limit($db,'people-role-change',(string)$companyId,20);
+        if ($managementAction === 'promote_employee') {
+            $employeeId = filter_var($_POST['employee_id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            $departmentId = filter_var($_POST['department_id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            $newRole = is_string($_POST['new_role'] ?? null) ? $_POST['new_role'] : '';
+            if (!$employeeId || !$departmentId || !in_array($newRole,['manager','department_head'],true)) fail('Choose an employee, department, and management role.',422);
+            $managerId = promote_employee_to_manager($db,$companyId,$employeeId,$departmentId,$newRole === 'department_head');
+            $manager = db_one($db,'SELECT manager_name, manager_email FROM managers WHERE id = ? AND company_id = ?',[$managerId,$companyId]);
+            $token = bin2hex(random_bytes(32));
+            db_run($db,'INSERT INTO staff_invitations (company_id,staff_role,staff_id,email,token_hash,expires_at) VALUES (?,?,?,?,?,UTC_TIMESTAMP() + INTERVAL 24 HOUR)',[$companyId,'manager',$managerId,$manager['manager_email'],hash('sha256',$token)]);
+            $sent = send_account_mail($manager['manager_email'],'Your Simplr manager invitation',"You have been promoted to " . ($newRole === 'department_head' ? 'department head' : 'manager') . " in " . $user['company_name'] . ".\n\nChoose a password for your manager sign-in using this link within 24 hours:\n" . account_link('/users/accept-invitation.php',$token) . "\n\nYour workspace code: " . $companyId . "\nIf you did not expect this invitation, contact your workspace owner.");
+            if ($sent) {
+                flash($manager['manager_name'] . ' was promoted. The mail server accepted the invitation; ask them to check spam or junk if it is not in the inbox.');
+            } else {
+                db_run($db,'UPDATE staff_invitations SET used_at = UTC_TIMESTAMP() WHERE company_id = ? AND staff_role = \'manager\' AND staff_id = ? AND token_hash = ? AND used_at IS NULL',[$companyId,$managerId,hash('sha256',$token)]);
+                flash($manager['manager_name'] . ' was promoted, but the mail server could not accept the invitation. Use Invite in the Managers directory to retry and check the server mail log if it continues.','error');
+            }
+            redirect('/users/admin/workspace.php?module=managers');
+        }
+        $managerId = filter_var($_POST['manager_id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        $replacementId = filter_var($_POST['replacement_manager_id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]) ?: 0;
+        if (!$managerId) fail('Choose a manager to demote.',422);
+        demote_manager_to_employee($db,$companyId,$managerId,$replacementId);
+        flash('Manager access was suspended. Their employee record and history were retained; reports and department leadership were reassigned where required.');
+        redirect('/users/admin/workspace.php?module=employees');
+    }
     if (!in_array($action,['new','edit'],true)) fail('Choose a form to save a record.',405);
     [$values,$errors] = validate_record($db,$companyId,$module,$_POST);
     if (!$errors) {
@@ -39,58 +92,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 if (in_array($key,['events','jobs'],true) && empty($record['timezone'])) $record['timezone'] = $settings['timezone'];
 if ($key === 'jobs' && $action === 'new' && !isset($record['status'])) $record['status'] = 'draft';
-suite_start($module['title'],$module['nav'],$user);
+suite_start($organizationView ? 'Organization chart' : $module['title'],$module['nav'],$user);
 ?>
-<div class="page-heading"><div><h1><?= e($module['title']) ?></h1><p><?= e($module['description']) ?></p></div><?php if ($action === 'list' && $canEdit): ?><a class="button" href="?module=<?= e($key) ?>&amp;action=new"><?= icon('plus') ?> Add <?= e($module['singular']) ?></a><?php endif; ?></div>
-<?php $siblings = array_filter(visible_modules($db,$user),fn($m)=>$m['nav'] === $module['nav']); if (count($siblings)>1 && $module['nav'] !== 'modules'): ?><nav class="module-tabs" aria-label="Related tools"><?php foreach ($siblings as $siblingKey=>$sibling): ?><a href="?module=<?= e($siblingKey) ?>" <?= $key === $siblingKey ? 'class="active" aria-current="page"' : '' ?>><?= e($sibling['title']) ?></a><?php endforeach; ?></nav><?php endif; ?>
+<div class="page-heading"><div><h1><?= $organizationView ? 'Organization chart' : e($module['title']) ?></h1><p><?= $organizationView ? 'Explore your company from its owner through departments, department heads, teams, managers, and their direct reports.' : ($key === 'teams' ? 'Create teams and assign each to its department, project, lead, and members.' : e($module['description'])) ?></p></div><?php if ($action === 'list' && $canEdit && !$organizationView): ?><a class="button" href="?module=<?= e($key) ?>&amp;action=new"><?= icon('plus') ?> Add <?= e($module['singular']) ?></a><?php endif; ?></div>
+<?php $siblings = array_filter(visible_modules($db,$user),fn($m)=>$m['nav'] === $module['nav']); if (count($siblings)>1 && $module['nav'] !== 'modules'): ?><nav class="module-tabs" aria-label="People and teams"><?php foreach ($siblings as $siblingKey=>$sibling): ?><a href="?module=<?= e($siblingKey) ?>" <?= !$organizationView && $key === $siblingKey ? 'class="active" aria-current="page"' : '' ?>><?= e($sibling['title']) ?></a><?php endforeach; ?><?php if ($isPeopleModule): ?><a href="?module=departments&amp;view=organization"<?= $organizationView ? ' class="active" aria-current="page"' : '' ?>>Organization chart</a><?php endif; ?></nav><?php endif; ?>
 <?php if (($_SESSION['auth_role'] ?? '') === 'admin' && in_array($key,['employees','managers'],true)): ?><div class="notice info">Add your people here, then choose Invite to email a link for them to set their own password. You can also send a new invitation if someone needs to reset access.</div><?php endif; ?>
 <?php if (!billing_module_active($db,$companyId,$key)): ?><div class="notice warning">This toolkit is available to view. Your workspace owner can renew editing access in <a href="/users/admin/billing.php">Billing</a>.</div><?php endif; ?>
 <?php if ($key === 'events'): ?><p><a class="text-link" href="/users/admin/calendar.php">View calendar</a></p><?php endif; ?>
 <?php if ($key === 'jobs'): ?><div class="notice info">Drafts are private. Choose Published to list the role on the job board. Closing a published role stops new applications; existing applicants can still track their status. Applications close at the end of the selected date in its timezone.</div><?php endif; ?>
 <?php if (array_filter($module['fields'],fn($f)=>$f['type'] === 'money')): ?><div class="notice info">Amounts are recorded in <?= e($settings['currency'] ?: 'an unspecified currency — ask your workspace owner to set it in Settings') ?>. No currency conversion is applied.</div><?php endif; ?>
-<?php if ($action === 'list' && in_array($key,['employees','managers'],true)): $orgTree = organization_tree($db,$companyId); ?>
-<section class="panel org-tree-panel"><div class="panel-head"><h2>Organizational chart</h2><span class="count-label">Trace reporting lines across departments</span></div>
-<?php if (empty($orgTree['departments'])): ?><p class="subtle">Add a department and assign managers to begin building your org chart.</p><?php else: foreach ($orgTree['departments'] as $department): ?>
-<div class="org-department">
-  <h3><?= e($department['name'] ?: 'Unassigned') ?></h3>
-  <?php if (!empty($department['managers'])): ?>
-  <div class="org-tree">
-    <?php foreach ($department['managers'] as $manager): ?>
-    <div class="org-node manager-node">
-      <div class="org-person">
-        <strong><?= e($manager['name']) ?></strong>
-        <?php if ($manager['email']): ?><span><?= e($manager['email']) ?></span><?php endif; ?>
-        <?php if ($manager['department_name']): ?><small><?= e($manager['department_name']) ?></small><?php endif; ?>
-      </div>
-      <?php if (!empty($manager['reports'])): ?>
-      <ul class="org-children">
-        <?php foreach ($manager['reports'] as $report): ?>
-        <li class="org-person report-person">
-          <strong><?= e($report['name']) ?></strong>
-          <?php if ($report['job_title']): ?><span><?= e($report['job_title']) ?></span><?php endif; ?>
-          <?php if ($report['email']): ?><small><?= e($report['email']) ?></small><?php endif; ?>
-        </li>
-        <?php endforeach; ?>
-      </ul>
-      <?php else: ?><p class="org-empty">No direct reports</p><?php endif; ?>
-    </div>
-    <?php endforeach; ?>
-  </div>
-  <?php endif; ?>
-  <?php if (!empty($department['unassigned_employees'])): ?>
-  <div class="org-standalone">
-    <h4>Unassigned</h4>
-    <ul class="org-children">
-      <?php foreach ($department['unassigned_employees'] as $employee): ?>
-      <li class="org-person report-person"><strong><?= e($employee['name']) ?></strong><?php if ($employee['job_title']): ?><span><?= e($employee['job_title']) ?></span><?php endif; ?><?php if ($employee['email']): ?><small><?= e($employee['email']) ?></small><?php endif; ?></li>
-      <?php endforeach; ?>
-    </ul>
-  </div>
-  <?php endif; ?>
-</div>
-<?php endforeach; endif; ?>
-</section>
-<?php endif; ?>
 <?php if ($action === 'view'): require __DIR__ . '/../../app/record-detail.php'; ?>
 <?php elseif ($action !== 'list'): ?>
 <section class="panel"><div class="panel-head"><h2><?= $action === 'edit' ? 'Edit' : 'Add' ?> <?= e($module['singular']) ?></h2><a class="text-link" href="?module=<?= e($key) ?>">Back to <?= e(strtolower($module['title'])) ?></a></div>
@@ -110,15 +120,34 @@ suite_start($module['title'],$module['nav'],$user);
 <?php endforeach; ?>
 <div class="form-actions"><button class="button" type="submit"><?= $action === 'edit' ? 'Save changes' : 'Add ' . e($module['singular']) ?></button><a class="button secondary" href="?module=<?= e($key) ?>">Cancel</a></div>
 </form></section>
+<?php elseif ($organizationView): $orgTree = organization_tree($db,$companyId); $departmentCount = count(array_filter($orgTree['departments'],fn($department)=>(int)$department['id'] > 0)); ?>
+<section class="panel org-chart-panel"><div class="panel-head"><h2>Organization structure</h2><span class="count-label"><?= $departmentCount ?> <?= $departmentCount === 1 ? 'department' : 'departments' ?></span></div>
+<div class="org-chart-scroll"><div class="org-tree-company">
+<div class="org-tree-root"><article class="org-card company-card"><span class="org-card-kind">Company</span><strong><?= e($orgTree['company']['name']) ?></strong></article></div>
+<div class="org-tree-owner"><article class="org-card owner-card"><span class="org-card-kind">Business owner</span><strong><?= e($orgTree['owner']['name']) ?></strong><?php if ($orgTree['owner']['email'] !== ''): ?><span><?= e($orgTree['owner']['email']) ?></span><?php endif; ?></article></div>
+<?php if (empty($orgTree['departments'])): ?><div class="empty-state compact"><?= icon('users') ?><h3>No departments yet</h3><p>Add departments, teams, managers, and employees, then assign reporting lines to build this chart.</p><a class="button small" href="?module=departments&amp;action=new">Add a department</a></div>
+<?php else: ?><div class="org-chart"><?php foreach ($orgTree['departments'] as $department): ?>
+<section class="org-tree-department" aria-label="<?= e($department['name'] ?: 'Unassigned leadership') ?> reporting tree">
+<div class="org-tree-root"><article class="org-card department-card"><span class="org-card-kind"><?= $department['id'] ? 'Department' : 'Other reporting lines' ?></span><strong><?= e($department['name'] ?: 'Unassigned') ?></strong></article></div>
+<?php if (!empty($department['head'])): ?><div class="org-tree-department-head"><article class="org-card head-card"><span class="org-card-kind">Department head</span><strong><?= e($department['head']['name']) ?></strong><?php if (!empty($department['head']['email'])): ?><span><?= e($department['head']['email']) ?></span><?php endif; ?></article><?php if (!empty($department['head']['reports'])): ?><ul class="org-tree-level org-tree-reports" aria-label="Department head's direct reports"><?php foreach ($department['head']['reports'] as $report): ?><li><article class="org-card employee-card"><span class="org-card-kind">Direct report</span><strong><?= e($report['name']) ?></strong><?php if (!empty($report['job_title'])): ?><span><?= e($report['job_title']) ?></span><?php endif; ?><?php if (!empty($report['email'])): ?><small><?= e($report['email']) ?></small><?php endif; ?></article></li><?php endforeach; ?></ul><?php endif; ?></div><?php endif; ?>
+<?php $branches = $department['managers']; if (!empty($department['unassigned_employees'])) $branches[] = ['name'=>'Unassigned employees','email'=>'','department_name'=>'','reports'=>$department['unassigned_employees'],'is_unassigned'=>true]; $hasDepartmentNodes = !empty($department['teams']) || $branches; ?>
+<?php if ($hasDepartmentNodes): ?><ul class="org-tree-level org-tree-department-content" aria-label="<?= $department['head'] ? 'Teams and managers under department head' : 'Teams and managers' ?>"><?php foreach ($department['teams'] as $team): ?><li><article class="org-card team-card"><span class="org-card-kind">Team</span><strong><?= e($team['name']) ?></strong></article></li><?php endforeach; ?><?php foreach ($branches as $manager): ?><li><article class="org-card<?= !empty($manager['is_unassigned']) ? ' unassigned-card' : '' ?>"><span class="org-card-kind"><?= !empty($manager['is_unassigned']) ? 'Reporting line' : 'Manager' ?></span><strong><?= e($manager['name']) ?></strong><?php if (!empty($manager['email'])): ?><span><?= e($manager['email']) ?></span><?php endif; ?><?php if (!empty($manager['department_name'])): ?><small><?= e($manager['department_name']) ?></small><?php endif; ?></article>
+<?php if (!empty($manager['reports'])): ?><ul class="org-tree-level org-tree-reports"><?php foreach ($manager['reports'] as $report): ?><li><article class="org-card employee-card"><span class="org-card-kind">Direct report</span><strong><?= e($report['name']) ?></strong><?php if (!empty($report['job_title'])): ?><span><?= e($report['job_title']) ?></span><?php endif; ?><?php if (!empty($report['email'])): ?><small><?= e($report['email']) ?></small><?php endif; ?></article></li><?php endforeach; ?></ul><?php else: ?><p class="org-no-reports">No direct reports</p><?php endif; ?>
+</li><?php endforeach; ?></ul><?php elseif (!$department['head']): ?><div class="org-tree-empty"><span>No teams, managers, or employees assigned to this department.</span></div><?php endif; ?>
+</section><?php endforeach; ?></div><?php endif; ?></div></div></section>
 <?php else:
     $query = is_string($_GET['q'] ?? null) ? mb_substr(trim($_GET['q']),0,100) : '';
     $stageField = module_stage_field($key);
     $stageOptions = $stageField ? $module['fields'][$stageField]['options'] : [];
     $stage = is_string($_GET['stage'] ?? null) && in_array($_GET['stage'],$stageOptions,true) ? $_GET['stage'] : '';
-    $requestedView = is_string($_GET['view'] ?? null) ? $_GET['view'] : ($_SESSION['record_view'][$key] ?? 'list');
-    $view = module_has_board($key) && $requestedView === 'board' ? 'board' : 'list';
-    if (isset($_GET['view'])) $_SESSION['record_view'][$key] = $view;
+    $archiveable = in_array($key,['employees','managers','tasks','projects'],true);
+    $trashView = $archiveable && ($_GET['view'] ?? '') === 'trash';
+    $requestedView = is_string($_GET['view'] ?? null) && !$trashView ? $_GET['view'] : ($_SESSION['record_view'][$key] ?? 'list');
+    $view = !$trashView && module_has_board($key) && $requestedView === 'board' ? 'board' : 'list';
+    if (isset($_GET['view']) && !$trashView) $_SESSION['record_view'][$key] = $view;
     $where = 'company_id = ?'; $params = [$companyId];
+    if ($archiveable) $where .= $trashView ? ' AND archived_at IS NOT NULL' : ' AND archived_at IS NULL';
+    if ($key === 'tasks' && !$trashView) $where .= ' AND (project_id IS NULL OR project_id = \'\' OR EXISTS (SELECT 1 FROM projects active_project WHERE active_project.company_id = tasks.company_id AND active_project.archived_at IS NULL AND (BINARY active_project.unique_id = BINARY tasks.project_id OR (BINARY tasks.project_id = CAST(active_project.id AS BINARY) AND NOT EXISTS (SELECT 1 FROM projects canonical WHERE canonical.company_id = active_project.company_id AND BINARY canonical.unique_id = BINARY tasks.project_id)))))';
     if ($query !== '') { $clauses = []; foreach ($module['columns'] as $column) { $clauses[] = "`$column` LIKE ?"; $params[] = '%' . str_replace(['!','%','_'],['!!','!%','!_'],$query) . '%'; } $where .= ' AND (' . implode(" ESCAPE '!' OR ",$clauses) . " ESCAPE '!')"; }
     $stageCounts = [];
     if ($stageField) foreach (db_rows($db,"SELECT `$stageField` AS stage, COUNT(*) AS count FROM `{$module['table']}` WHERE $where GROUP BY `$stageField`",$params) as $row) $stageCounts[(string)$row['stage']] = (int)$row['count'];
@@ -131,9 +160,9 @@ suite_start($module['title'],$module['nav'],$user);
         : db_rows($db,"SELECT * FROM `{$module['table']}` WHERE $listWhere ORDER BY `{$module['pk']}` DESC LIMIT 25 OFFSET $offset",$listParams);
     $progress = $key === 'projects' ? project_task_progress($db,$companyId) : [];
     $currency = (string)($settings['currency'] ?? '');
-    $link = fn(array $changes) => '?' . http_build_query(array_filter(array_merge(['module'=>$key,'q'=>$query,'stage'=>$stage],$changes),fn($value)=>$value !== '' && $value !== null));
+    $link = fn(array $changes) => '?' . http_build_query(array_filter(array_merge(['module'=>$key,'q'=>$query,'stage'=>$stage],$trashView ? ['view'=>'trash'] : [],$changes),fn($value)=>$value !== '' && $value !== null));
 ?>
-<section class="panel"><div class="table-toolbar"><form method="get" role="search" class="toolbar-search"><input type="hidden" name="module" value="<?= e($key) ?>"><?php if ($stage !== ''): ?><input type="hidden" name="stage" value="<?= e($stage) ?>"><?php endif; ?><label class="sr-only" for="search">Search <?= e(strtolower($module['title'])) ?></label><span class="search-field"><?= icon('search') ?><input class="filter-input" id="search" type="search" name="q" placeholder="Search <?= e(strtolower($module['title'])) ?>…" value="<?= e($query) ?>" maxlength="100"></span><button class="button small secondary" type="submit">Search</button></form><div class="toolbar-end"><a class="button small secondary" href="/users/admin/reports.php?export=<?= e(rawurlencode($key)) ?>" title="Download every <?= e(strtolower($module['singular'])) ?> as a CSV file"><?= icon('download') ?> Export</a><span class="count-label"><?= number_format($count) ?> <?= $count === 1 ? 'record' : 'records' ?></span><?php if (module_has_board($key)): ?><div class="view-switch" role="group" aria-label="Layout"><a href="<?= e($link(['view'=>'list','stage'=>$stage])) ?>"<?= $view === 'list' ? ' aria-current="page"' : '' ?>><?= icon('list') ?>List</a><a href="<?= e($link(['view'=>'board','stage'=>null])) ?>"<?= $view === 'board' ? ' aria-current="page"' : '' ?>><?= icon('columns') ?>Board</a></div><?php endif; ?></div></div>
+<section class="panel"><div class="table-toolbar"><form method="get" role="search" class="toolbar-search"><input type="hidden" name="module" value="<?= e($key) ?>"><?php if ($trashView): ?><input type="hidden" name="view" value="trash"><?php endif; ?><?php if ($stage !== ''): ?><input type="hidden" name="stage" value="<?= e($stage) ?>"><?php endif; ?><label class="sr-only" for="search">Search <?= e(strtolower($module['title'])) ?></label><span class="search-field"><?= icon('search') ?><input class="filter-input" id="search" type="search" name="q" placeholder="Search <?= e(strtolower($module['title'])) ?>…" value="<?= e($query) ?>" maxlength="100"></span><button class="button small secondary" type="submit">Search</button></form><div class="toolbar-end"><?php if ($archiveable): ?><a class="button small secondary" href="?module=<?= e($key) ?><?= $trashView ? '' : '&amp;view=trash' ?>"><?= $trashView ? 'Back to active records' : 'Trash' ?></a><?php endif; ?><a class="button small secondary" href="/users/admin/reports.php?export=<?= e(rawurlencode($key)) ?>" title="Download every <?= e(strtolower($module['singular'])) ?> as a CSV file"><?= icon('download') ?> Export</a><span class="count-label"><?= $trashView ? 'Trash · ' : '' ?><?= number_format($count) ?> <?= $count === 1 ? 'record' : 'records' ?></span><?php if (module_has_board($key) && !$trashView): ?><div class="view-switch" role="group" aria-label="Layout"><a href="<?= e($link(['view'=>'list','stage'=>$stage])) ?>"<?= $view === 'list' ? ' aria-current="page"' : '' ?>><?= icon('list') ?>List</a><a href="<?= e($link(['view'=>'board','stage'=>null])) ?>"<?= $view === 'board' ? ' aria-current="page"' : '' ?>><?= icon('columns') ?>Board</a></div><?php endif; ?></div></div>
 <?php if ($stageField && $view === 'list' && array_sum($stageCounts) > 0): ?><nav class="stage-filter" aria-label="Filter by <?= e(strtolower($module['fields'][$stageField]['label'])) ?>"><a href="<?= e($link(['stage'=>null])) ?>"<?= $stage === '' ? ' aria-current="true"' : '' ?>>All <span><?= number_format(array_sum($stageCounts)) ?></span></a><?php foreach ($stageOptions as $option): ?><a href="<?= e($link(['stage'=>$option])) ?>"<?= $stage === $option ? ' aria-current="true"' : '' ?>><i class="stage-dot <?= e(stage_class($option)) ?>"></i><?= e(ucfirst($option)) ?> <span><?= number_format($stageCounts[$option] ?? 0) ?></span></a><?php endforeach; ?></nav><?php endif; ?>
 <?php if (!$rows && $view === 'list'): ?><div class="empty-state"><?= icon($module['icon']) ?><h3><?= $query !== '' || $stage !== '' ? 'No matching records.' : 'No ' . e(strtolower($module['title'])) . ' yet.' ?></h3><p><?= $query !== '' || $stage !== '' ? 'Try a different search or filter, or clear it to see all your records.' : 'Add your first ' . e($module['singular']) . ' to get started.' ?></p><?php if ($canEdit || $query !== '' || $stage !== ''): ?><a class="button small secondary" href="?module=<?= e($key) ?><?= $query === '' && $stage === '' ? '&amp;action=new' : '' ?>"><?= $query !== '' || $stage !== '' ? 'Clear filters' : 'Add ' . e($module['singular']) ?></a><?php endif; ?></div>
 <?php elseif ($view === 'board'):
@@ -145,6 +174,7 @@ suite_start($module['title'],$module['nav'],$user);
 <div class="board" data-board data-module="<?= e($key) ?>" data-editable="<?= $canEdit ? 'true' : 'false' ?>" data-csrf="<?= e(csrf_token()) ?>">
 <?php foreach ($grouped as $stageValue=>$cards): ?><section class="board-column" data-board-column data-stage="<?= e($stageValue) ?>" data-label="<?= e(ucfirst($stageValue)) ?>" aria-labelledby="stage-<?= e(stage_class($stageValue)) ?>"><header><i class="stage-dot <?= e(stage_class($stageValue)) ?>"></i><h3 id="stage-<?= e(stage_class($stageValue)) ?>"><?= e(ucfirst($stageValue)) ?></h3><span class="board-count" data-board-count><?= count($cards) ?></span></header><div class="board-list" data-board-list><?php foreach ($cards as $row): $title = record_title($module,$row); ?><article class="board-card" data-board-card data-id="<?= (int)$row[$module['pk']] ?>" data-version="<?= e(record_version($row)) ?>" data-title="<?= e($title) ?>" tabindex="0"<?= $canEdit ? ' draggable="true" aria-describedby="board-help"' : '' ?>><a class="board-card-title" draggable="false" href="?module=<?= e($key) ?>&amp;action=view&amp;id=<?= (int)$row[$module['pk']] ?>"><?= e($title) ?></a><?php if ($key === 'projects'): ?><?= progress_html($progress[(int)$row['id']] ?? null) ?><?php endif; ?><div class="board-card-meta"><?php foreach ($metaColumns as $column): if (($row[$column] ?? '') === '' || $row[$column] === null) continue; ?><span><?= record_cell_html($module,$column,$row,$currency,$stageField) ?></span><?php endforeach; ?></div></article><?php endforeach; ?></div><p class="board-empty" data-board-empty<?= $cards ? ' hidden' : '' ?>><?= $canEdit ? 'Drop cards here' : 'Nothing here' ?></p></section><?php endforeach; ?>
 </div>
-<?php else: ?><div class="table-wrap"><table class="data-table"><caption class="sr-only"><?= e($module['title']) ?> in your workspace</caption><thead><tr><?php foreach ($module['columns'] as $column): ?><th scope="col"><?= e($module['fields'][$column]['label'] ?? ucfirst(str_replace('_',' ',$column))) ?></th><?php endforeach; ?><?php if ($key === 'projects'): ?><th scope="col">Progress</th><?php endif; ?><th scope="col">Action</th></tr></thead><tbody><?php foreach ($rows as $row): ?><tr><?php foreach ($module['columns'] as $index=>$column): ?><td><?php if ($index === 0): ?><a class="row-title" href="?module=<?= e($key) ?>&amp;action=view&amp;id=<?= (int)$row[$module['pk']] ?>"><?= e(record_title($module,$row)) ?></a><?php else: ?><?= record_cell_html($module,$column,$row,$currency,$stageField) ?><?php endif; ?></td><?php endforeach; ?><?php if ($key === 'projects'): ?><td><?= progress_html($progress[(int)$row['id']] ?? null) ?></td><?php endif; ?><td class="row-actions"><a class="text-link" href="?module=<?= e($key) ?>&amp;action=view&amp;id=<?= (int)$row[$module['pk']] ?>">View<span class="sr-only"> <?= e($row[$module['columns'][0]]) ?></span></a><?php if ($canEdit): ?><a class="text-link" href="?module=<?= e($key) ?>&amp;action=edit&amp;id=<?= (int)$row[$module['pk']] ?>">Edit<span class="sr-only"> <?= e($row[$module['columns'][0]]) ?></span></a><?php if (($_SESSION['auth_role'] ?? '') === 'admin' && in_array($key,['employees','managers'],true)): ?><form method="post" action="/users/admin/invite.php" style="display:inline" data-submit><?= csrf_field() ?><input type="hidden" name="role" value="<?= $key === 'employees' ? 'employee' : 'manager' ?>"><input type="hidden" name="staff_id" value="<?= (int)$row[$module['pk']] ?>"><button class="button small secondary" type="submit">Invite</button></form><?php endif; ?><?php else: ?><span class="subtle">View only</span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
+<?php elseif ($trashView): ?><div class="notice warning">Archived records are hidden from active workspaces. Restoring puts them back. Permanent deletion cannot be undone and is available only to the workspace owner when no linked history or records remain.</div><div class="table-wrap"><table class="data-table"><caption class="sr-only">Archived <?= e(strtolower($module['title'])) ?> in your workspace</caption><thead><tr><th scope="col"><?= e(ucfirst($module['singular'])) ?></th><th scope="col">Removed</th><th scope="col">Actions</th></tr></thead><tbody><?php foreach ($rows as $row): $rowId = (int)$row[$module['pk']]; $rowTitle = record_title($module,$row); ?><tr><td><a class="row-title" href="?module=<?= e($key) ?>&amp;view=trash&amp;action=view&amp;id=<?= $rowId ?>"><?= e($rowTitle) ?></a></td><td><?= e($row['archived_at']) ?></td><td class="row-actions"><?php if ($canEdit): ?><form method="post" style="display:inline" data-submit><?= csrf_field() ?><input type="hidden" name="management_action" value="restore_record"><input type="hidden" name="record_id" value="<?= $rowId ?>"><input type="hidden" name="version" value="<?= e(record_version($row)) ?>"><button class="button small secondary" type="submit">Restore</button></form><?php if (($_SESSION['auth_role'] ?? '') === 'admin'): ?><form method="post" style="display:inline" data-confirm="Permanently delete <?= e($rowTitle) ?>? This cannot be undone, and the action may be blocked while linked records remain."><?= csrf_field() ?><input type="hidden" name="management_action" value="purge_record"><input type="hidden" name="record_id" value="<?= $rowId ?>"><input type="hidden" name="version" value="<?= e(record_version($row)) ?>"><button class="button small secondary danger-text" type="submit">Delete permanently</button></form><?php endif; ?><?php else: ?><span class="subtle">View only</span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
+<?php else: ?><div class="table-wrap"><table class="data-table"><caption class="sr-only"><?= e($module['title']) ?> in your workspace</caption><thead><tr><?php foreach ($module['columns'] as $column): ?><th scope="col"><?= e($module['fields'][$column]['label'] ?? ucfirst(str_replace('_',' ',$column))) ?></th><?php endforeach; ?><?php if ($key === 'projects'): ?><th scope="col">Progress</th><?php endif; ?><th scope="col">Action</th></tr></thead><tbody><?php foreach ($rows as $row): ?><tr><?php foreach ($module['columns'] as $index=>$column): ?><td><?php if ($index === 0): ?><a class="row-title" href="?module=<?= e($key) ?>&amp;action=view&amp;id=<?= (int)$row[$module['pk']] ?>"><?= e(record_title($module,$row)) ?></a><?php else: ?><?= record_cell_html($module,$column,$row,$currency,$stageField) ?><?php endif; ?></td><?php endforeach; ?><?php if ($key === 'projects'): ?><td><?= progress_html($progress[(int)$row['id']] ?? null) ?></td><?php endif; ?><td class="row-actions"><a class="text-link" href="?module=<?= e($key) ?>&amp;action=view&amp;id=<?= (int)$row[$module['pk']] ?>">View<span class="sr-only"> <?= e($row[$module['columns'][0]]) ?></span></a><?php if ($canEdit): ?><a class="text-link" href="?module=<?= e($key) ?>&amp;action=edit&amp;id=<?= (int)$row[$module['pk']] ?>">Edit<span class="sr-only"> <?= e($row[$module['columns'][0]]) ?></span></a><?php if ($archiveable): ?><form method="post" style="display:inline" data-submit data-confirm="Move <?= e(record_title($module,$row)) ?> to Trash? You can restore it later."><?= csrf_field() ?><input type="hidden" name="management_action" value="archive_record"><input type="hidden" name="record_id" value="<?= (int)$row[$module['pk']] ?>"><input type="hidden" name="version" value="<?= e(record_version($row)) ?>"><button class="button small secondary danger-text" type="submit">Move to Trash</button></form><?php endif; ?><?php if (($_SESSION['auth_role'] ?? '') === 'admin' && in_array($key,['employees','managers'],true)): ?><?php if ($key === 'employees' || !in_array($row['status'],['suspended','disabled','inactive'],true)): ?><form method="post" action="/users/admin/invite.php" style="display:inline" data-submit><?= csrf_field() ?><input type="hidden" name="role" value="<?= $key === 'employees' ? 'employee' : 'manager' ?>"><input type="hidden" name="staff_id" value="<?= (int)$row[$module['pk']] ?>"><button class="button small secondary" type="submit">Invite</button></form><?php endif; ?><?php if ($key === 'employees' && (($linkedManager = db_one($db,'SELECT id,status FROM managers WHERE company_id = ? AND employee_id = ?',[$companyId,(int)$row['id']])) === null || in_array($linkedManager['status'],['suspended','disabled','inactive'],true))): ?><details class="role-change"><summary class="button small secondary"><?= $linkedManager ? 'Restore management role' : 'Promote' ?></summary><form method="post" class="form-stack" data-submit><?= csrf_field() ?><input type="hidden" name="management_action" value="promote_employee"><input type="hidden" name="employee_id" value="<?= (int)$row['id'] ?>"><div class="field"><label for="promote-department-<?= (int)$row['id'] ?>">Department</label><select id="promote-department-<?= (int)$row['id'] ?>" name="department_id" required><option value="">Choose department</option><?php foreach (reference_options($db,$companyId,'departments') as $departmentId=>$departmentName): ?><option value="<?= e($departmentId) ?>"<?= (string)$departmentId === (string)$row['department_id'] ? ' selected' : '' ?>><?= e($departmentName) ?></option><?php endforeach; ?></select></div><div class="field"><label for="promote-role-<?= (int)$row['id'] ?>">Promote to</label><select id="promote-role-<?= (int)$row['id'] ?>" name="new_role" required><option value="manager">Manager</option><option value="department_head">Department head</option></select></div><button class="button small" type="submit">Confirm promotion</button></form></details><?php elseif ($key === 'managers' && !in_array($row['status'],['suspended','disabled','inactive'],true) && (int)($row['employee_id'] ?? 0) > 0): $reportCount = (int)db_one($db,'SELECT COUNT(*) AS count FROM employees WHERE company_id = ? AND manager_id = ?',[$companyId,(int)$row['id']])['count']; $isDepartmentHead = (bool)db_one($db,'SELECT id FROM departments WHERE company_id = ? AND manager_id = ? LIMIT 1',[$companyId,(int)$row['id']]); $replacementRequired = $reportCount > 0 || $isDepartmentHead; ?><details class="role-change"><summary class="button small secondary">Demote</summary><form method="post" class="form-stack" data-submit><?= csrf_field() ?><input type="hidden" name="management_action" value="demote_manager"><input type="hidden" name="manager_id" value="<?= (int)$row['id'] ?>"><div class="field"><label for="replacement-manager-<?= (int)$row['id'] ?>">Replacement manager<?= $replacementRequired ? ' *' : ' (optional)' ?></label><select id="replacement-manager-<?= (int)$row['id'] ?>" name="replacement_manager_id"<?= $replacementRequired ? ' required' : '' ?>><option value="">No replacement</option><?php foreach (db_rows($db,"SELECT id,manager_name FROM managers WHERE company_id = ? AND department_id = ? AND id != ? AND status NOT IN ('suspended','disabled','inactive') ORDER BY manager_name",[$companyId,$row['department_id'],$row['id']]) as $replacement): ?><option value="<?= (int)$replacement['id'] ?>"><?= e($replacement['manager_name']) ?></option><?php endforeach; ?></select></div><?php if ($replacementRequired): ?><small>Direct reports and any department-head assignment will move to the replacement. Choose an active manager in this department.</small><?php endif; ?><button class="button small secondary" type="submit">Confirm demotion</button></form></details><?php endif; ?><?php endif; ?><?php else: ?><span class="subtle">View only</span><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
 <?php if ($pages>1 && $view === 'list'): ?><div class="table-toolbar"><span class="count-label">Page <?= $page ?> of <?= $pages ?></span><div class="form-actions"><?php if ($page>1): ?><a class="button small secondary" href="<?= e($link(['page'=>$page-1])) ?>">Previous</a><?php endif; ?><?php if ($page<$pages): ?><a class="button small secondary" href="<?= e($link(['page'=>$page+1])) ?>">Next</a><?php endif; ?></div></div><?php endif; ?>
 </section><?php endif; suite_end(); ?>

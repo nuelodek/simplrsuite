@@ -8,7 +8,7 @@
   class SentryInitializer {
       public function initialize() {
           init([
-              'dsn' => 'https://bd57a327b8c04ca2bc2907391b50147a@o4508098840821760.ingest.us.sentry.io/4508132099817472',
+              'dsn' => '',
               'traces_sample_rate' => 1.0,
               'profiles_sample_rate' => 1.0,
           ]);

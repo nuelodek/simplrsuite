@@ -39,7 +39,7 @@
           });
 
       // Set the customer token
-      const customerToken = 'v2.public.eyJyb2xlIjoiYWRtaW4iLCJ1c2VySWQiOiIxMjI2OSIsInN1YiI6InN1cGVyYWRtaW5Ac2ltcGxyLmNvbS5uZyIsImV4cCI6IjIwMjQtMDgtMTdUMTM6MzU6MTIuOTM1WiIsImp0aSI6IjM1NTAxOCIsIm9yZ0lkIjoiNTU5NyIsInNjb3BlIjoiYXBwbGljYXRpb25zLXdyaXRlIGFjY291bnRzLXdyaXRlIGNhcmRzLXdyaXRlIiwib3JnIjoiU2ltcGxyIEJ1c2luZXNzIFN1aXRlIiwidXNlclR5cGUiOiJvcmciLCJpc1VuaXRQaWxvdCI6ZmFsc2V9ZouVA3aLkTmu7jE6zHra1PWnzasIG8gCNSNu--3tjbcTTYFU1WzfCIJGRq009YnjHreztDWid9BqdhLLqEBHBw';
+      const customerToken = '';
       document.querySelector("unit-elements-account").setAttribute("customer-token", customerToken);
       document.querySelector("unit-elements-activity").setAttribute("customer-token", customerToken);
   </script>

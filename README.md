@@ -88,6 +88,10 @@ serving the repository directly without its deny rules can expose private files.
 - Business signup, verification, login, password recovery, and sign out.
 - Shared responsive dashboard and 23 record work areas, with search, pagination,
   validated create/edit forms, tenant checks, and stale-edit protection.
+- Employees, managers, tasks, and projects can be moved to Trash and restored.
+  Permanent deletion is workspace-owner-only and is blocked while linked history
+  or dependencies remain. Apply migration `030_recoverable_record_archive.sql`
+  before using Trash.
 - Overview dashboard with overdue alerts, live KPIs (active projects, open tasks,
   open pipeline, month's net cash), a focus list, project progress from task
   completion, pipeline and task charts, upcoming events and readable activity.
@@ -109,14 +113,24 @@ serving the repository directly without its deny rules can expose private files.
   there create a record in the new Documents tool. Attachments accept PDF, PNG,
   JPEG, macro-free Word/Excel/PowerPoint (`.docx/.xlsx/.pptx`) and CSV. Every
   record list has an Export button (CSV through the existing report export).
-- GitHub (`/users/admin/github.php`): the workspace owner connects with GitHub
-  sign-in (needs `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` and a GitHub OAuth App
-  whose callback is `<APP_URL>/users/admin/github.php?oauth=callback`) or with a
-  fine-grained personal access token. Tokens are encrypted with AES-256-GCM using
+- GitHub (`/users/admin/github.php`): plug and play. Simplr provides one GitHub
+  OAuth App for every workspace (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` in the
+  server environment); its authorization callback URL must be exactly
+  `<APP_URL>/users/admin/github.php`. Workspace owners just click Connect GitHub;
+  a fine-grained personal access token remains under "Other ways to connect".
+  Disconnecting revokes the grant on GitHub. Tokens are encrypted with AES-256-GCM using
   `APP_KEY` (required in production; local development creates a private key in
   `storage/keys/`). Linked repositories show open issues, pull requests and recent
   commits on the project page; Sync turns open issues into tasks once and completes
-  tasks whose issues closed. Nothing is written to GitHub. Test it offline with
+  tasks whose issues closed. A workspace can connect several GitHub accounts; each
+  linked repository reads through its own account. Owners match GitHub usernames to
+  employees (GitHub page or the employee record), so synced tasks are assigned,
+  follow reassignments made on GitHub, alert the assignee and get the due-date
+  reminders from `jobs/notifications.php`. Schedule both jobs on the server:
+  `*/15 * * * * php jobs/github-sync.php` (auto-sync can be turned off per
+  repository; `GITHUB_SYNC_MINUTES` changes the interval) and
+  `* * * * * php jobs/notifications.php`; `deploy/scheduler.md` has the full cron
+  setup and monitoring. Nothing is written to GitHub. Test it offline with
   `scripts/github_stub_server.php` and `scripts/github_smoke_test.py` (instructions
   at the top of the test).
 - Employee and manager directories and email invitations. Invitees choose their
@@ -156,6 +170,49 @@ PDF/PNG/JPEG attachments require record access, download as files, and are limit
 to the lower of 5 MB or the server upload limit, 20 per record and 100 MB per company.
 Uploads are not antivirus-scanned. Persist and back up `storage/attachments`
 together with database metadata; never expose that directory directly over HTTP.
+In People & teams, the organization chart places each department head above that
+department's teams and other managers. Owners can promote an employee to manager
+or department head; the employee record is retained and a separate manager
+invitation grants manager sign-in after acceptance. Demoting a linked manager
+suspends manager access and requires reassignment of their reports and department
+head role when applicable. Team records can be assigned directly to a department.
+The chart follows explicit employee manager assignments; when none exists, it
+places the employee under their department head or, if there is no head, the
+department's only listed manager. This display fallback does not change records.
+The calendar shows a month grid, highlights days with events, task deadlines,
+or project start/end dates and milestones, and opens that day's items in a dialog.
+Task assignees and project managers are shown when available; tasks and projects
+appear only for users who have access to those workspace tools.
+
+### Alerts, task queries, and penalties
+
+Alerts appear in the signed-in workspace bell and Alerts page. Routine task
+reminders follow each person's email preference (instant, daily digest, or
+in-app only); formal query and penalty notices are always emailed. Query
+deadlines and warning expiry are reviewed by the CLI scheduler. Run
+`php jobs/notifications.php` every minute after migrations are applied so
+short response windows are processed promptly; task reminders are deduplicated
+to one per task per local day. The job also retries the email outbox and sends
+digests. Configure `APP_URL` as an HTTPS origin before enabling SMTP.
+Both jobs record a heartbeat; `php scripts/scheduler_status.php` exits 1 when a job
+is late, stuck or failing, so it can drive an alert. See `deploy/scheduler.md`.
+
+An authorised workspace owner or manager can issue a written query about a
+task or project. Select several eligible people or the whole eligible project
+team; Simplr creates a separate query and private response record for each
+person. Response windows can be as short as one minute. The subject can respond
+in Simplr before or after the response window; once it passes, the query is
+eligible for review and a late response is marked as late. A missed deadline
+does not automatically impose a penalty. Managers may propose a penalty, but
+only the workspace owner approves or rejects it. After approval, the owner can
+assign it to an authenticated employee or manager for HR, Accounting, or another
+function.
+The assigned person can forward it to another staff member or record completion;
+handoffs are audited and notify the next assignee. A subject may acknowledge or
+appeal an approved penalty. Simplr records these decisions and does not execute
+payroll deductions, post accounting entries, or impose a penalty automatically.
+Configure the default response window and warning expiry under Workspace
+settings.
 
 Billing offers **Paystack for NGN and Flutterwave for USD**, following the original
 `simplr24` currency/provider choice. The server owns prices, conversion, orders and
@@ -191,6 +248,9 @@ python scripts/talent_smoke_test.py
 python scripts/consolidation_smoke_test.py
 php scripts/accounting_unit_test.php
 php scripts/richtext_unit_test.php
+php scripts/migration_matrix_test.php --all
+php scripts/migration_failure_recovery_test.php
+php scripts/role_transition_test.php
 python scripts/marketing_smoke_test.py
 node scripts/consolidation_browser_test.cjs
 node --check public/scripts/suite.js
@@ -208,6 +268,12 @@ Additional journey checks: `access_smoke_test.py`, `operations_smoke_test.py`,
 `workspace_browser_test.cjs` under `scripts/`. Payment test setup is documented
 in `work/payment-launch.md`. Do not run fixture suites against real customer data.
 
+Secret scanning runs on pull requests and pushes with Gitleaks, scanning the
+commits introduced by each change and redacting findings. To scan the full
+repository history locally, install Gitleaks and run
+`gitleaks git --redact --no-banner --log-opts="--all"`; historical findings
+require owner-led credential rotation and review, not an allowlist.
+
 The smoke test creates synthetic companies and records using real HTTP forms and
 API calls. It retains those records for inspection and writes results under
 `work/test-results/`. It exercises account recovery, tenant isolation, input
@@ -215,6 +281,45 @@ validation, record updates, invitations, role restrictions, and legacy adapters.
 It never sends real email. Run it only against a disposable local development
 database, not a production copy. Repeated rapid runs can trigger the app's real
 rate limits; wait for the 15-minute window rather than weakening those limits.
+
+## Troubleshooting
+
+- **Invitation or recovery email is not arriving:** for local work, use
+  `APP_ENV=local` and `MAIL_TRANSPORT=log`, then inspect the generated test
+  message under `storage/mail/` without sharing its contents; links there can
+  contain account tokens. For a real SMTP setup, confirm the approved test
+  recipient, `MAIL_FROM_ADDRESS`, `SMTP_HOST`, `SMTP_PORT`, credentials and
+  encryption in private server configuration. Check the PHP/server error log
+  for the redacted delivery error. Do not switch to real SMTP for local tests.
+- **An email link points to localhost or the wrong audience:** configure the
+  real HTTPS `APP_URL` and, when audience subdomains are deployed, the matching
+  `APP_BUSINESS_URL`, `APP_TALENT_URL` and `APP_WORK_URL`. Do not send test
+  messages to real users while those settings are local or placeholders.
+- **Install or upgrade stops at a migration:** `php scripts/migrate.php --install`
+  is only for a new empty database. Back up an existing database before running
+  `php scripts/migrate.php` without `--install`. If the email uniqueness
+  migration reports duplicates, stop and reconcile them with the account owner;
+  the migration intentionally does not delete or merge accounts. Do not mark a
+  migration applied manually to bypass an error.
+- **Scheduled alerts or GitHub sync are late/failing:** run
+  `php scripts/scheduler_status.php` as the same service user as the scheduled
+  jobs, inspect the job logs and PHP error log, and compare the configured cron
+  cadence with `deploy/scheduler.md`. Confirm the scheduler account can read the
+  application's private environment and write to `storage/`. Do not run jobs
+  through a web request or use root.
+- **A backup/restore check fails:** the included
+  `scripts/backup_restore_drill.php` is restricted to a local `simplr_dev*`
+  database with log mail; it is not a production restore tool. Preserve the
+  source database, inspect the private drill logs and address missing tables,
+  checksum mismatches or attachment errors before retrying. Production backup
+  destinations, retention and recovery objectives still require an approved
+  operations plan.
+- **Payment setup or checkout is unavailable:** provider checkout is gated by
+  server configuration and remains disabled until owner-approved sandbox
+  verification and production merchant setup are complete. Follow
+  `work/payment-launch.md`; never paste provider credentials into tickets or
+  documentation, enable live mode for testing, or perform a real charge as a
+  troubleshooting step.
 
 ## Deployment configuration
 

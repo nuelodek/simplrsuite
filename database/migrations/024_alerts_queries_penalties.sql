@@ -1,0 +1,97 @@
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id` INT NOT NULL,
+  `recipient_role` VARCHAR(20) NOT NULL,
+  `recipient_id` INT NOT NULL,
+  `kind` VARCHAR(40) NOT NULL,
+  `title` VARCHAR(200) NOT NULL,
+  `body` VARCHAR(1000) NOT NULL DEFAULT '',
+  `url` VARCHAR(255) NOT NULL DEFAULT '',
+  `is_formal` TINYINT(1) NOT NULL DEFAULT 0,
+  `dedupe_key` VARCHAR(120) NULL DEFAULT NULL,
+  `read_at` DATETIME NULL DEFAULT NULL,
+  `email_status` VARCHAR(12) NOT NULL DEFAULT 'pending',
+  `email_attempts` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `emailed_at` DATETIME NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `notifications_once` (`company_id`,`recipient_role`,`recipient_id`,`dedupe_key`),
+  KEY `notifications_inbox` (`company_id`,`recipient_role`,`recipient_id`,`read_at`,`id`),
+  KEY `notifications_outbox` (`email_status`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `notification_preferences` (
+  `company_id` INT NOT NULL,
+  `recipient_role` VARCHAR(20) NOT NULL,
+  `recipient_id` INT NOT NULL,
+  `email_mode` VARCHAR(10) NOT NULL DEFAULT 'instant',
+  `last_digest_at` DATETIME NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`company_id`,`recipient_role`,`recipient_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `task_queries` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id` INT NOT NULL,
+  `reference` VARCHAR(24) NOT NULL,
+  `task_id` INT NULL DEFAULT NULL,
+  `subject_role` VARCHAR(20) NOT NULL,
+  `subject_id` INT NOT NULL,
+  `issued_by_role` VARCHAR(20) NOT NULL,
+  `issued_by_id` INT NOT NULL,
+  `title` VARCHAR(200) NOT NULL,
+  `facts` TEXT NOT NULL,
+  `message` TEXT NOT NULL,
+  `respond_by` DATETIME NOT NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'awaiting_response',
+  `response` TEXT NULL,
+  `responded_at` DATETIME NULL DEFAULT NULL,
+  `decision_note` TEXT NULL,
+  `decided_by_role` VARCHAR(20) NULL DEFAULT NULL,
+  `decided_by_id` INT NULL DEFAULT NULL,
+  `decided_at` DATETIME NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `task_queries_reference` (`company_id`,`reference`),
+  KEY `task_queries_subject` (`company_id`,`subject_role`,`subject_id`,`status`),
+  KEY `task_queries_task` (`company_id`,`task_id`),
+  KEY `task_queries_due` (`status`,`respond_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `penalties` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id` INT NOT NULL,
+  `query_id` BIGINT UNSIGNED NOT NULL,
+  `subject_role` VARCHAR(20) NOT NULL,
+  `subject_id` INT NOT NULL,
+  `penalty_type` VARCHAR(30) NOT NULL,
+  `reason` TEXT NOT NULL,
+  `amount` DECIMAL(12,2) NULL DEFAULT NULL,
+  `currency` VARCHAR(3) NOT NULL DEFAULT '',
+  `starts_on` DATE NULL DEFAULT NULL,
+  `ends_on` DATE NULL DEFAULT NULL,
+  `expires_on` DATE NULL DEFAULT NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'proposed',
+  `proposed_by_role` VARCHAR(20) NOT NULL,
+  `proposed_by_id` INT NOT NULL,
+  `decided_by` INT NULL DEFAULT NULL,
+  `decided_at` DATETIME NULL DEFAULT NULL,
+  `decision_note` VARCHAR(1000) NOT NULL DEFAULT '',
+  `acknowledged_at` DATETIME NULL DEFAULT NULL,
+  `appeal_text` TEXT NULL,
+  `appealed_at` DATETIME NULL DEFAULT NULL,
+  `appeal_outcome` VARCHAR(20) NULL DEFAULT NULL,
+  `appeal_note` VARCHAR(1000) NOT NULL DEFAULT '',
+  `appeal_decided_at` DATETIME NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `penalties_subject` (`company_id`,`subject_role`,`subject_id`,`status`),
+  KEY `penalties_query` (`company_id`,`query_id`),
+  KEY `penalties_expiry` (`status`,`expires_on`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `workspace_settings`
+  ADD COLUMN `query_response_hours` SMALLINT UNSIGNED NOT NULL DEFAULT 72 AFTER `timezone`,
+  ADD COLUMN `warning_expiry_months` TINYINT UNSIGNED NOT NULL DEFAULT 12 AFTER `query_response_hours`;

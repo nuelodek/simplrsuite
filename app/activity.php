@@ -33,6 +33,7 @@ function activity_entries(mysqli $db, int $companyId, array $rows, int $viewerId
             $role === 'admin' => 'The workspace owner',
             isset($people[$role][$actorId]) && $people[$role][$actorId] !== '' => $people[$role][$actorId],
             $role === 'talent' => 'A candidate',
+            $role === 'system' => 'Simplr (automatically)',
             default => ucfirst($role ?: 'Someone'),
         };
         $key = $row['target_type']; $targetId = (int)$row['target_id'];
@@ -57,10 +58,12 @@ function activity_entries(mysqli $db, int $companyId, array $rows, int $viewerId
             'settings.updated' => $actor . ' updated workspace settings',
             'job.social_sync_requested' => $actor . ' queued a social post for ' . $name,
             'integration.connected' => $actor . ' connected ' . (['github'=>'GitHub'][$row['target_id']] ?? ucfirst($row['target_id'])) . (isset($details['account']) ? ' as @' . $details['account'] : ''),
-            'integration.disconnected' => $actor . ' disconnected ' . (['github'=>'GitHub'][$row['target_id']] ?? ucfirst($row['target_id'])),
+            'integration.disconnected' => $actor . ' disconnected ' . (['github'=>'GitHub'][$row['target_id']] ?? ucfirst($row['target_id'])) . (isset($details['account']) ? ' account @' . $details['account'] : ''),
             'github.repository_linked' => $actor . ' linked ' . ($details['repository'] ?? 'a repository') . ' to ' . $name,
             'github.repository_unlinked' => $actor . ' unlinked ' . ($details['repository'] ?? 'a repository') . ' from ' . $name,
-            'github.issues_synced' => $actor . ' synced GitHub issues for ' . $name . (isset($details['imported']) ? ' (' . (int)$details['imported'] . ' new, ' . (int)($details['completed'] ?? 0) . ' completed)' : ''),
+            'github.issues_synced' => $actor . ' synced GitHub issues for ' . $name . (isset($details['imported']) ? ' (' . (int)$details['imported'] . ' new, ' . (int)($details['completed'] ?? 0) . ' completed' . (!empty($details['assigned']) ? ', ' . (int)$details['assigned'] . ' assigned' : '') . ')' : ''),
+            'github.people_matched' => $actor . ' matched ' . (int)($details['count'] ?? 0) . ' GitHub ' . ((int)($details['count'] ?? 0) === 1 ? 'username' : 'usernames') . ' to employees',
+            'github.auto_sync_changed' => $actor . ' turned automatic sync ' . (!empty($details['enabled']) ? 'on' : 'off') . ' for ' . ($details['repository'] ?? 'a repository'),
             'talent.shortlisted' => $actor . ' shortlisted a candidate',
             'talent.removed_from_shortlist' => $actor . ' removed a candidate from the shortlist',
             'talent.invited' => $actor . ' invited a candidate to apply',

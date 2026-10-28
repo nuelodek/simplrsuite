@@ -24,7 +24,7 @@ db_run($db,$v['sql'],$v['params']); echo 'ok';"""
 def settings_post(client,currency='NGN',timezone='Africa/Lagos'):
     token,body=client.form('/users/admin/settings.php')
     version=re.search(r'name="version" value="([a-f0-9]+)"',body).group(1)
-    return {'csrf_token':token,'version':version,'company_name':'Test Workspace Alpha','currency':currency,'timezone':timezone}
+    return {'csrf_token':token,'version':version,'company_name':'Test Workspace Alpha','currency':currency,'timezone':timezone,'query_response_minutes':'4320','warning_expiry_months':'12'}
 
 try:
     fixture=json.loads((ROOT/'.local/browser-fixture.json').read_text())

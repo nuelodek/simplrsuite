@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__ . '/../app/view.php';
 $privacyEmail = config('PRIVACY_CONTACT_EMAIL');
+$privacyEmail = $privacyEmail !== '' ? $privacyEmail : 'NUELODEKUNLE20@GMAIL.COM';
+$privacyPhone = config('PRIVACY_CONTACT_PHONE');
+$privacyPhone = $privacyPhone !== '' ? $privacyPhone : '+234 702 680 6672';
+$privacyAddress = config('PRIVACY_BUSINESS_ADDRESS');
+$privacyAddress = $privacyAddress !== '' ? $privacyAddress : 'Shop 12 Mosadioluwa Complex, Idi Ose, Ibadan, Oyo State, Nigeria, 234000';
 $privacyDate = config('PRIVACY_REVIEWED_ON');
 $privacyReady = config('PRIVACY_APPROVED','false') === 'true';
 page_head('Privacy Policy', ['description' => 'Learn how Simplr Suite collects, uses, and protects personal information.']);
@@ -13,6 +18,7 @@ page_head('Privacy Policy', ['description' => 'Learn how Simplr Suite collects, 
     </header>
     <main id="main" class="privacy-main public-container">
         <div class="privacy-heading">
+            <p class="eyebrow">Privacy notice</p>
             <h1>Privacy Policy</h1>
             <p>How Simplr Suite handles personal information and the choices available to you.</p>
         </div>
@@ -20,22 +26,27 @@ page_head('Privacy Policy', ['description' => 'Learn how Simplr Suite collects, 
     <?php if (!$privacyReady): ?><p role="status"><strong>Draft for review.</strong> Business contact details and the final data-handling notice must be confirmed before public launch.</p><?php endif; ?>
 
     <h2>Introduction</h2>
-    <p>Welcome to Simplr Business Suites. We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you about how we look after your personal data when you visit our website (regardless of where you visit it from) and tell you about your privacy rights and how the law protects you. We encourage you to read this policy carefully to understand our practices regarding your personal information and how we will treat it.</p>
+    <p>Welcome to Simplr Suite. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we handle personal information across the Simplr Suite platform and associated public pages, and it sets out your rights and choices.</p>
 
     <h2>Important Information and Who We Are</h2>
 
     <h3>Purpose of this Privacy Policy</h3>
-    <p>This privacy policy aims to give you comprehensive information on how Simplr Business Suites collects and processes your personal data through your use of this website, including any data you may provide through this website when you sign up for our services, purchase a product or service, or take part in a competition. It also explains how we use cookies and similar technologies, and your rights regarding the personal information we hold about you.</p>
+    <p>This privacy policy explains how Simplr Suite handles personal data across the website, business workspace, talent profile pages, and employee work portal, including the information you provide when you create an account, request a service, or apply for a role. It also explains our use of cookies and related technologies, and the choices available to you regarding your information.</p>
 
-    <h3>Controller</h3><p>Legal business name: <?= e((config('PRIVACY_LEGAL_NAME') ?: 'Not yet configured')) ?></p>
-    <p>Simplr Business Suites is the controller and responsible for your personal data (collectively referred to as "Simplr", "we", "us" or "our" in this privacy policy). We are committed to ensuring that all personal data we process is done so in accordance with applicable data protection laws.</p>
+    <h3>Controller</h3>
+    <p>Legal business name: <?= e((config('PRIVACY_LEGAL_NAME') ?: 'Numerox Consulting')) ?></p>
+    <p>Business name registration number: <?= e(config('PRIVACY_REGISTRATION_NUMBER') ?: 'BN 7228508') ?></p>
+    <p>Date of registration: <?= e(config('PRIVACY_REGISTERED_ON') ?: '2023-11-17') ?></p>
+    <p>Registration status: <?= e(ucfirst(config('PRIVACY_REGISTRATION_STATUS') ?: 'inactive')) ?> (reported by the business owner; confirm or update with the CAC before production launch).</p>
+    <p>Business type: <?= e(config('PRIVACY_BUSINESS_TYPE') ?: 'Sole proprietor') ?></p>
+    <p>Numerox Consulting is the controller and responsible for your personal data (collectively referred to as "Simplr", "we", "us" or "our" in this privacy policy). Simplr Suite is the product and service operated by Numerox Consulting. The business owner must confirm the registration and legal details and approve this notice before production launch.</p>
 
     <h3>Contact Details</h3>
     <p>If you have any questions about this privacy policy or our privacy practices, please don't hesitate to contact us in the following ways:</p>
     <ul>
         <li><strong>Email address:</strong> <?= filter_var($privacyEmail,FILTER_VALIDATE_EMAIL) ? e($privacyEmail) : 'Not yet configured' ?></li>
-        <li><strong>Postal address:</strong> <?= e((config('PRIVACY_BUSINESS_ADDRESS') ?: 'Not yet configured')) ?></li>
-        <li><strong>Phone number:</strong> <?= e((config('PRIVACY_CONTACT_PHONE') ?: 'Not provided')) ?></li>
+        <li><strong>Postal address:</strong> <?= e($privacyAddress) ?></li>
+        <li><strong>Phone number:</strong> <?= e($privacyPhone) ?></li>
     </ul>
 
     <h3>Changes to the Privacy Policy and Your Duty to Inform Us of Changes</h3>

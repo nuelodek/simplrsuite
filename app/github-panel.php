@@ -8,6 +8,7 @@ if ($key === 'tasks') {
 }
 $githubLinks = github_project_links($db,$companyId,$id);
 $githubConnection = github_connection($db,$companyId);
+$canRelink = $canEdit && $githubConnection;
 $canSync = $canEdit && module_access($db,$user,'tasks') === 'edit';
 $ago = fn(?string $iso) => $iso ? time_ago(gmdate('Y-m-d H:i:s',strtotime($iso))) : '';
 ?>
@@ -15,17 +16,18 @@ $ago = fn(?string $iso) => $iso ? time_ago(gmdate('Y-m-d H:i:s',strtotime($iso))
 <?php if (!$githubLinks): ?><div class="empty-state compact"><?= icon('branch') ?><h3>No repository linked</h3><p><?= $githubConnection ? 'Link a repository to see its issues, pull requests and commits here, and turn issues into tasks.' : 'Connect GitHub to see code activity alongside this project.' ?></p><?php if ($githubConnection && $canEdit): ?><a class="button small secondary" href="/users/admin/github.php?project=<?= $id ?>"><?= icon('branch') ?> Link repository</a><?php elseif (!$githubConnection && ($_SESSION['auth_role'] ?? '') === 'admin'): ?><a class="button small secondary" href="/users/admin/github.php"><?= icon('github') ?> Connect GitHub</a><?php endif; ?></div>
 <?php else: foreach ($githubLinks as $link):
     $issues = $pulls = $commits = []; $problem = '';
-    if (!$githubConnection) $problem = 'GitHub is disconnected. Reconnect it in Integrations to see live activity.';
+    $linkConnection = github_link_connection($db,$link);
+    if (!$linkConnection) $problem = $githubConnection ? 'The GitHub account this repository used was disconnected. Relink it through one of your connected accounts.' : 'GitHub is disconnected. Reconnect it in Integrations to see live activity.';
     else {
         try {
             $path = github_repo_path($link['repo_full_name']);
-            $issues = array_values(array_filter(github_cached($db,$githubConnection,$path . '/issues',['state'=>'open','per_page'=>10]),fn($item)=>is_array($item) && !isset($item['pull_request'])));
-            $pulls = github_cached($db,$githubConnection,$path . '/pulls',['state'=>'open','per_page'=>6]);
-            $commits = github_cached($db,$githubConnection,$path . '/commits',['per_page'=>6]);
+            $issues = array_values(array_filter(github_cached($db,$linkConnection,$path . '/issues',['state'=>'open','per_page'=>10]),fn($item)=>is_array($item) && !isset($item['pull_request'])));
+            $pulls = github_cached($db,$linkConnection,$path . '/pulls',['state'=>'open','per_page'=>6]);
+            $commits = github_cached($db,$linkConnection,$path . '/commits',['per_page'=>6]);
         } catch (GitHubUnavailable $error) { $problem = $error->getMessage(); }
     }
 ?>
-<div class="repo-block"><div class="repo-block-head"><div><a class="repo-name" href="<?= e($link['html_url'] ?: '#') ?>" target="_blank" rel="noopener noreferrer"><?= icon('branch') ?><?= e($link['repo_full_name']) ?></a><small><span class="badge <?= $link['is_private'] ? 'draft' : 'active' ?>"><?= $link['is_private'] ? 'Private' : 'Public' ?></span><?= $link['default_branch'] !== '' ? ' ' . e($link['default_branch']) . ' ·' : '' ?> <?= $link['last_synced_at'] ? 'issues synced ' . e(time_ago($link['last_synced_at'])) : 'issues not synced yet' ?></small></div><?php if ($canSync && $githubConnection): ?><form method="post" action="/users/admin/github.php" data-submit><?= csrf_field() ?><input type="hidden" name="action" value="sync"><input type="hidden" name="link_id" value="<?= (int)$link['id'] ?>"><input type="hidden" name="return_to" value="project"><input type="hidden" name="project_id" value="<?= $id ?>"><button class="button small" type="submit"><?= icon('refresh') ?> Sync issues to tasks</button></form><?php endif; ?></div>
+<div class="repo-block"><div class="repo-block-head"><div><a class="repo-name" href="<?= e($link['html_url'] ?: '#') ?>" target="_blank" rel="noopener noreferrer"><?= icon('branch') ?><?= e($link['repo_full_name']) ?></a><small><span class="badge <?= $link['is_private'] ? 'draft' : 'active' ?>"><?= $link['is_private'] ? 'Private' : 'Public' ?></span><?= $link['default_branch'] !== '' ? ' ' . e($link['default_branch']) . ' ·' : '' ?> <?= $link['last_synced_at'] ? 'issues synced ' . e(time_ago($link['last_synced_at'])) : 'issues not synced yet' ?><?= $link['account_login'] ? ' · via @' . e($link['account_login']) : '' ?></small></div><?php if (!$linkConnection && $canRelink): ?><form method="post" action="/users/admin/github.php" data-submit><?= csrf_field() ?><input type="hidden" name="action" value="link"><input type="hidden" name="project_id" value="<?= $id ?>"><input type="hidden" name="repository" value="<?= e($link['repo_full_name']) ?>"><input type="hidden" name="return_to" value="project"><button class="button small" type="submit"><?= icon('refresh') ?> Relink</button></form><?php endif; ?><?php if ($canSync && $linkConnection): ?><form method="post" action="/users/admin/github.php" data-submit><?= csrf_field() ?><input type="hidden" name="action" value="sync"><input type="hidden" name="link_id" value="<?= (int)$link['id'] ?>"><input type="hidden" name="return_to" value="project"><input type="hidden" name="project_id" value="<?= $id ?>"><button class="button small" type="submit"><?= icon('refresh') ?> Sync issues to tasks</button></form><?php endif; ?></div>
 <?php if ($problem !== ''): ?><p class="notice warning compact"><?= e($problem) ?></p><?php else: ?>
 <div class="repo-columns">
 <div><h3>Open issues <span class="count-label"><?= count($issues) ?><?= count($issues) === 10 ? '+' : '' ?></span></h3><?php if (!$issues): ?><p class="subtle">No open issues.</p><?php else: ?><ul class="gh-list"><?php foreach (array_slice($issues,0,5) as $item): ?><li><a href="<?= e(github_safe_url($item['html_url'] ?? '') ?: '#') ?>" target="_blank" rel="noopener noreferrer"><?= e((string)($item['title'] ?? 'Untitled issue')) ?></a><small>#<?= (int)($item['number'] ?? 0) ?> · <?= e((string)($item['user']['login'] ?? 'unknown')) ?> · <?= e($ago($item['created_at'] ?? null)) ?><?php foreach (array_slice($item['labels'] ?? [],0,2) as $label): if (!is_array($label)) continue; ?> <span class="gh-label"><?= e(mb_strimwidth((string)($label['name'] ?? ''),0,18,'…')) ?></span><?php endforeach; ?></small></li><?php endforeach; ?></ul><?php endif; ?></div>

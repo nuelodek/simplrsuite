@@ -6,7 +6,7 @@ $role = is_string($_GET['role'] ?? null) ? $_GET['role'] : 'employee';
 if (!in_array($role,['employee','manager'],true)) fail('Choose an employee or manager.',422);
 $staffId = filter_var($_GET['id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]) ?: null;
 $table = $role === 'employee' ? 'employees' : 'managers';
-$staffList = db_rows($db,$role === 'employee' ? 'SELECT id, CONCAT(first_name, \' \', last_name) AS name, email FROM employees WHERE company_id = ? ORDER BY name' : 'SELECT id, manager_name AS name, manager_email AS email FROM managers WHERE company_id = ? ORDER BY name',[$companyId]);
+$staffList = db_rows($db,$role === 'employee' ? 'SELECT id, CONCAT(first_name, \' \', last_name) AS name, email FROM employees WHERE company_id = ? AND archived_at IS NULL ORDER BY name' : 'SELECT id, manager_name AS name, manager_email AS email FROM managers WHERE company_id = ? AND archived_at IS NULL ORDER BY name',[$companyId]);
 $person = null;
 foreach ($staffList as $candidate) if ((int)$candidate['id'] === $staffId) $person = $candidate;
 if ($staffId && !$person) fail('This person could not be found in your workspace.',404);

@@ -84,8 +84,8 @@ function modules(): array {
         ],'columns'=>['title','due_date','priority','status']],
         'departments' => ['title'=>'Departments','singular'=>'department','nav'=>'people','icon'=>'users','description'=>'Build a clear structure for the people behind your business.','table'=>'departments','pk'=>'id','fields'=>['department_name'=>field('Department name','text',true,100),'location'=>field('Location','text',false),'manager_id'=>field('Department head','ref:managers',false)],'columns'=>['department_name','location','created_at']],
         'managers' => ['title'=>'Managers','singular'=>'manager','nav'=>'people','icon'=>'users','description'=>'Keep your management directory organized by department.','table'=>'managers','pk'=>'id','fields'=>['manager_name'=>field('Full name'),'manager_email'=>field('Email','email'),'department_id'=>field('Department','ref:departments')],'columns'=>['manager_name','manager_email','status']],
-        'employees' => ['title'=>'Employees','singular'=>'employee','nav'=>'people','icon'=>'users','description'=>'A shared directory of your people and their roles.','table'=>'employees','pk'=>'id','fields'=>['first_name'=>field('First name','text',true,50),'last_name'=>field('Last name','text',true,50),'email'=>field('Email','email',true,100),'phone'=>field('Phone','tel',false,20),'hire_date'=>field('Hire date','date'),'job_title'=>field('Job title','text',false,100),'department_id'=>field('Department','ref:departments'),'manager_id'=>field('Manager','ref:managers',false)],'columns'=>['first_name','last_name','email','job_title']],
-        'teams' => ['title'=>'Teams','singular'=>'team','nav'=>'people','icon'=>'users','description'=>'Bring the right people together around a shared project.','table'=>'teams','pk'=>'id','fields'=>['team_name'=>field('Team name'),'team_description'=>field('Description','textarea',false,10000),'project_id'=>field('Project','ref:project_ids',false),'team_leader_id'=>field('Team lead','ref:employees',false),'team_members'=>field('Members','multi:employees',false),'team_status'=>field('Status','select',true,50,['active','inactive'])],'columns'=>['team_name','team_status','created_at']],
+        'employees' => ['title'=>'Employees','singular'=>'employee','nav'=>'people','icon'=>'users','description'=>'A shared directory of your people and their roles.','table'=>'employees','pk'=>'id','fields'=>['first_name'=>field('First name','text',true,50),'last_name'=>field('Last name','text',true,50),'email'=>field('Email','email',true,100),'phone'=>field('Phone','tel',false,20),'hire_date'=>field('Hire date','date'),'job_title'=>field('Job title','text',false,100),'department_id'=>field('Department','ref:departments'),'manager_id'=>field('Manager','ref:managers',false),'github_login'=>field('GitHub username','text',false,39)],'columns'=>['first_name','last_name','email','job_title']],
+        'teams' => ['title'=>'Teams','singular'=>'team','nav'=>'people','icon'=>'users','description'=>'Bring the right people together around a shared project.','table'=>'teams','pk'=>'id','fields'=>['team_name'=>field('Team name'),'department_id'=>field('Department','ref:departments',false),'team_description'=>field('Description','textarea',false,10000),'project_id'=>field('Project','ref:project_ids',false),'team_leader_id'=>field('Team lead','ref:employees',false),'team_members'=>field('Members','multi:employees',false),'team_status'=>field('Status','select',true,50,['active','inactive'])],'columns'=>['team_name','team_status','created_at']],
         'leads' => ['title'=>'Leads','singular'=>'lead','nav'=>'sales','icon'=>'chart','description'=>'Turn first conversations into lasting customer relationships.','table'=>'leads','pk'=>'lead_id','fields'=>['lead_name'=>field('Lead name'),'lead_email'=>field('Email','email',false),'lead_phone'=>field('Phone','tel',false,20),'lead_source'=>field('Source','select',true,50,['Website','Social-Media','Email','Referral']),'status'=>field('Status','select',true,50,['new','contacted','qualified','lost'])],'columns'=>['lead_name','lead_email','lead_source','status']],
         'customers' => ['title'=>'Customers','singular'=>'customer','nav'=>'sales','icon'=>'users','description'=>'Keep the details that help you look after your customers.','table'=>'customers','pk'=>'id','fields'=>['first_name'=>field('First name','text',true,50),'last_name'=>field('Last name','text',true,50),'business_name'=>field('Business name'),'customer_email'=>field('Email','email',true,100),'phone_number'=>field('Phone','tel',false,20),'address'=>field('Address','text',false),'acquired_item'=>field('Product or service','text',false)],'columns'=>['first_name','last_name','business_name','customer_email']],
         'contacts' => ['title'=>'Contacts','singular'=>'contact','nav'=>'sales','icon'=>'users','description'=>'Keep your business conversations connected.','table'=>'contacts','pk'=>'contact_id','fields'=>['contact_name'=>field('Full name'),'contact_email'=>field('Email','email',false),'contact_phone'=>field('Phone','tel',false,20),'lead_id'=>field('Lead','ref:leads',false,50),'customer_id'=>field('Customer','ref:customer_codes',false,50)],'columns'=>['contact_name','contact_email','contact_phone']],
@@ -103,17 +103,120 @@ function modules(): array {
         'objectives' => ['title'=>'Business strategy','singular'=>'objective','nav'=>'modules','icon'=>'chart','description'=>'Connect your priorities to clear objectives and target dates.','table'=>'business_objectives','pk'=>'id','fields'=>['title'=>field('Objective'),'description'=>field('Description','textarea',false,10000),'target_date'=>field('Target date','date'),'status'=>field('Status','select',true,50,['planned','ongoing','completed','on hold']),'measure'=>field('Success measure','text',false)],'columns'=>['title','target_date','status','measure']],
     ];
 }
+function promote_employee_to_manager(mysqli $db, int $companyId, int $employeeId, int $departmentId, bool $departmentHead): int {
+    if ($departmentId < 1 || !db_one($db,'SELECT id FROM departments WHERE id = ? AND company_id = ?',[$departmentId,$companyId])) fail('Choose a department in this workspace.',422);
+    $db->begin_transaction();
+    try {
+        $employee = db_one($db,'SELECT * FROM employees WHERE id = ? AND company_id = ? FOR UPDATE',[$employeeId,$companyId]);
+        if (!$employee) { $db->rollback(); fail('This employee could not be found in your workspace.',404); }
+        $existingManager = db_one($db,'SELECT * FROM managers WHERE company_id = ? AND employee_id = ? FOR UPDATE',[$companyId,$employeeId]);
+        if ($existingManager && !in_array($existingManager['status'],['suspended','disabled','inactive'],true)) { $db->rollback(); fail('This employee already has an active manager record.',409); }
+        $emailManager = db_one($db,'SELECT id,employee_id FROM managers WHERE company_id = ? AND LOWER(manager_email) = LOWER(?) LIMIT 1',[$companyId,$employee['email']]);
+        if ($emailManager && (!$existingManager || (int)$emailManager['id'] !== (int)$existingManager['id'])) { $db->rollback(); fail('A manager record already uses this email. Review that record before promoting this employee.',409); }
+        $role = db_one($db,'SELECT id FROM roles WHERE company_id = ? AND role_name = ?',[$companyId,'Manager']);
+        if (!$role) {
+            db_run($db,'INSERT INTO roles (company_id,role_name) VALUES (?,?)',[$companyId,'Manager']);
+            $role = ['id'=>(int)$db->insert_id];
+        }
+        if ($existingManager) {
+            $managerId = (int)$existingManager['id'];
+            db_run($db,"UPDATE managers SET manager_name = ?, manager_email = ?, department_id = ?, role_id = ?, status = 'pending' WHERE id = ? AND company_id = ?",[trim($employee['first_name'] . ' ' . $employee['last_name']),$employee['email'],$departmentId,$role['id'],$managerId,$companyId]);
+        } else {
+            $uniqueId = 'man_' . bin2hex(random_bytes(10));
+            db_run($db,"INSERT INTO managers (company_id,unique_id,manager_name,manager_email,department_id,employee_id,role_id,status) VALUES (?,?,?,?,?,?,?,'pending')",[$companyId,$uniqueId,trim($employee['first_name'] . ' ' . $employee['last_name']),$employee['email'],$departmentId,$employeeId,$role['id']]);
+            $managerId = (int)$db->insert_id;
+        }
+        db_run($db,'UPDATE employees SET department_id = ? WHERE id = ? AND company_id = ?',[$departmentId,$employeeId,$companyId]);
+        if ($departmentHead) db_run($db,'UPDATE departments SET manager_id = ? WHERE id = ? AND company_id = ?',[$managerId,$departmentId,$companyId]);
+        audit_event($db,$companyId,$departmentHead ? 'employee.promoted_department_head' : 'employee.promoted_manager','employees',(string)$employeeId,['manager_id'=>$managerId,'department_id'=>$departmentId]);
+        $db->commit();
+        return $managerId;
+    } catch (Throwable $error) { $db->rollback(); throw $error; }
+}
+function demote_manager_to_employee(mysqli $db, int $companyId, int $managerId, int $replacementId): int {
+    $db->begin_transaction();
+    try {
+        $manager = db_one($db,'SELECT * FROM managers WHERE id = ? AND company_id = ? FOR UPDATE',[$managerId,$companyId]);
+        if (!$manager) { $db->rollback(); fail('This manager could not be found in your workspace.',404); }
+        $employeeId = (int)($manager['employee_id'] ?? 0);
+        if ($employeeId < 1) { $db->rollback(); fail('This manager has no linked employee record. Add or reconcile their employee record before demoting them.',409); }
+        $employee = db_one($db,'SELECT id FROM employees WHERE id = ? AND company_id = ? FOR UPDATE',[$employeeId,$companyId]);
+        if (!$employee) { $db->rollback(); fail('The linked employee record could not be found.',409); }
+        if (in_array($manager['status'],['suspended','disabled','inactive'],true)) { $db->rollback(); fail('This manager is already inactive.',409); }
+        $departmentId = (int)$manager['department_id'];
+        $reports = (int)db_one($db,'SELECT COUNT(*) AS count FROM employees WHERE company_id = ? AND manager_id = ?',[$companyId,$managerId])['count'];
+        $isDepartmentHead = (bool)db_one($db,'SELECT id FROM departments WHERE company_id = ? AND manager_id = ? LIMIT 1',[$companyId,$managerId]);
+        $managedProjects = (int)db_one($db,'SELECT COUNT(*) AS count FROM projects WHERE company_id = ? AND (projectManager = ? OR project_manager_id = ?)',[$companyId,(string)$managerId,(string)$manager['unique_id']])['count'];
+        $replacement = null;
+        if ($reports > 0 || $isDepartmentHead) {
+            if ($replacementId < 1 || $replacementId === $managerId) { $db->rollback(); fail('Choose a replacement manager before demoting this manager with direct reports, projects, or a department-head role.',422); }
+            $replacement = db_one($db,"SELECT id,unique_id,department_id FROM managers WHERE id = ? AND company_id = ? AND status NOT IN ('suspended','disabled','inactive') FOR UPDATE",[$replacementId,$companyId]);
+            if (!$replacement || ($departmentId > 0 && (int)$replacement['department_id'] !== $departmentId)) { $db->rollback(); fail('Choose an active replacement manager in the same department.',422); }
+        }
+        if ($replacement) {
+            db_run($db,'UPDATE employees SET manager_id = ? WHERE company_id = ? AND manager_id = ?',[$replacementId,$companyId,$managerId]);
+            db_run($db,'UPDATE departments SET manager_id = ? WHERE company_id = ? AND manager_id = ?',[$replacementId,$companyId,$managerId]);
+            db_run($db,'UPDATE projects SET projectManager = ?, project_manager_id = ? WHERE company_id = ? AND (projectManager = ? OR project_manager_id = ?)',[$replacementId,$replacement['unique_id'],$companyId,(string)$managerId,(string)$manager['unique_id']]);
+        } elseif ($managedProjects > 0) {
+            db_run($db,'UPDATE projects SET projectManager = NULL, project_manager_id = NULL WHERE company_id = ? AND (projectManager = ? OR project_manager_id = ?)',[$companyId,(string)$managerId,(string)$manager['unique_id']]);
+        }
+        db_run($db,"UPDATE managers SET status = 'suspended' WHERE id = ? AND company_id = ?",[$managerId,$companyId]);
+        $employeeRole = db_one($db,'SELECT id FROM roles WHERE company_id = ? AND role_name = ?',[$companyId,'Employee']);
+        if (!$employeeRole) {
+            db_run($db,'INSERT INTO roles (company_id,role_name) VALUES (?,?)',[$companyId,'Employee']);
+            $employeeRole = ['id'=>(int)$db->insert_id];
+        }
+        db_run($db,'UPDATE employees SET role_id = ? WHERE id = ? AND company_id = ?',[$employeeRole['id'],$employeeId,$companyId]);
+        db_run($db,'UPDATE staff_invitations SET used_at = UTC_TIMESTAMP() WHERE company_id = ? AND staff_role = \'manager\' AND staff_id = ? AND used_at IS NULL',[$companyId,$managerId]);
+        audit_event($db,$companyId,'manager.demoted_to_employee','managers',(string)$managerId,['employee_id'=>$employeeId,'replacement_manager_id'=>$replacementId ?: null,'reports_reassigned'=>$reports,'projects_reassigned'=>$managedProjects,'department_head_reassigned'=>$isDepartmentHead]);
+        $db->commit();
+        return $employeeId;
+    } catch (Throwable $error) { $db->rollback(); throw $error; }
+}
 function organization_tree(mysqli $db, int $companyId): array {
+    $owner = db_one($db,'SELECT company_name, email FROM users WHERE company_id = ? ORDER BY id LIMIT 1',[$companyId]) ?? [];
+    $companyName = trim((string)($owner['company_name'] ?? ''));
+    if ($companyName === '') $companyName = 'Company';
     $departments = db_rows($db,'SELECT * FROM departments WHERE company_id = ? ORDER BY department_name',[$companyId]);
-    $managers = db_rows($db,'SELECT m.*, d.department_name FROM managers m LEFT JOIN departments d ON d.id = m.department_id AND d.company_id = m.company_id WHERE m.company_id = ? ORDER BY m.manager_name',[$companyId]);
-    $employees = db_rows($db,'SELECT e.*, CONCAT(e.first_name, " ", e.last_name) AS full_name, d.department_name FROM employees e LEFT JOIN departments d ON d.id = e.department_id AND d.company_id = e.company_id WHERE e.company_id = ? ORDER BY e.last_name, e.first_name',[$companyId]);
+    $managers = db_rows($db,"SELECT m.*, d.department_name FROM managers m LEFT JOIN departments d ON d.id = m.department_id AND d.company_id = m.company_id WHERE m.company_id = ? AND m.archived_at IS NULL AND m.status NOT IN ('suspended','disabled','inactive') ORDER BY m.manager_name",[$companyId]);
+    $employees = db_rows($db,'SELECT e.*, CONCAT(e.first_name, " ", e.last_name) AS full_name, d.department_name FROM employees e LEFT JOIN departments d ON d.id = e.department_id AND d.company_id = e.company_id WHERE e.company_id = ? AND e.archived_at IS NULL ORDER BY e.last_name, e.first_name',[$companyId]);
+    $teams = db_rows($db,'SELECT t.id, t.team_name, t.department_id, t.team_leader_id, t.team_members, p.department AS project_department FROM teams t LEFT JOIN projects p ON p.company_id = t.company_id AND p.id = t.project_id AND p.archived_at IS NULL WHERE t.company_id = ? ORDER BY t.team_name',[$companyId]);
 
     $reportsByManager = [];
+    $employeeDepartments = [];
+    $employeeManagerAssignments = [];
+    $employeesRepresentedAsManagers = [];
+    foreach ($managers as $manager) if ((int)($manager['employee_id'] ?? 0) > 0) $employeesRepresentedAsManagers[(int)$manager['employee_id']] = true;
+    $chartManagerIds = [];
+    $managersByDepartment = [];
+    foreach ($managers as $manager) {
+        $managerId = (int)$manager['id'];
+        $chartManagerIds[$managerId] = true;
+        $departmentId = (int)($manager['department_id'] ?? 0);
+        if ($departmentId > 0) $managersByDepartment[$departmentId][] = $managerId;
+    }
+    $defaultManagerByDepartment = [];
+    foreach ($departments as $department) {
+        $departmentId = (int)$department['id'];
+        $headId = (int)($department['manager_id'] ?? 0);
+        if ($headId > 0 && isset($chartManagerIds[$headId])) {
+            $defaultManagerByDepartment[$departmentId] = $headId;
+        } elseif (count($managersByDepartment[$departmentId] ?? []) === 1) {
+            $defaultManagerByDepartment[$departmentId] = $managersByDepartment[$departmentId][0];
+        }
+    }
     foreach ($employees as $employee) {
+        $employeeId = (int)$employee['id'];
+        $departmentId = (int)($employee['department_id'] ?? 0);
+        $employeeDepartments[$employeeId] = $departmentId;
+        if (isset($employeesRepresentedAsManagers[$employeeId])) continue;
         $managerId = (int)($employee['manager_id'] ?? 0);
+        if ($managerId > 0 && !isset($chartManagerIds[$managerId])) $managerId = 0;
+        if ($managerId === 0) $managerId = $defaultManagerByDepartment[$departmentId] ?? 0;
+        $employeeManagerAssignments[$employeeId] = $managerId;
         if ($managerId > 0) {
             $reportsByManager[$managerId][] = [
-                'id' => (int)$employee['id'],
+                'id' => $employeeId,
                 'name' => trim((string)$employee['full_name']),
                 'email' => trim((string)($employee['email'] ?? '')),
                 'job_title' => trim((string)($employee['job_title'] ?? '')),
@@ -128,9 +231,54 @@ function organization_tree(mysqli $db, int $companyId): array {
             'id' => (int)$department['id'],
             'name' => trim((string)($department['department_name'] ?? '')),
             'manager_id' => (int)($department['manager_id'] ?? 0),
+            'head' => null,
+            'teams' => [],
             'managers' => [],
             'unassigned_employees' => [],
         ];
+    }
+
+    $departmentsByName = [];
+    foreach ($departmentMap as $departmentId => $department) {
+        if ($department['name'] !== '') $departmentsByName[mb_strtolower($department['name'])] = $departmentId;
+    }
+    $unassignedTeams = [];
+    foreach ($teams as $team) {
+        $departmentId = (int)($team['department_id'] ?? 0);
+        if ($departmentId > 0 && !isset($departmentMap[$departmentId])) $departmentId = 0;
+        $projectDepartment = trim((string)($team['project_department'] ?? ''));
+        if ($departmentId === 0 && $projectDepartment !== '') {
+            if (ctype_digit($projectDepartment) && isset($departmentMap[(int)$projectDepartment])) {
+                $departmentId = (int)$projectDepartment;
+            } else {
+                $departmentId = $departmentsByName[mb_strtolower($projectDepartment)] ?? 0;
+            }
+        }
+        if ($departmentId === 0) {
+            $leaderId = (int)($team['team_leader_id'] ?? 0);
+            $leaderDepartment = $employeeDepartments[$leaderId] ?? 0;
+            if ($leaderDepartment > 0 && isset($departmentMap[$leaderDepartment])) $departmentId = $leaderDepartment;
+        }
+        if ($departmentId === 0) {
+            $members = json_decode((string)($team['team_members'] ?? ''),true);
+            $memberDepartments = [];
+            if (is_array($members)) {
+                foreach ($members as $memberId) {
+                    $memberDepartment = $employeeDepartments[(int)$memberId] ?? 0;
+                    if ($memberDepartment > 0 && isset($departmentMap[$memberDepartment])) $memberDepartments[$memberDepartment] = true;
+                }
+            }
+            if (count($memberDepartments) === 1) $departmentId = (int)array_key_first($memberDepartments);
+        }
+        $teamNode = [
+            'id' => (int)$team['id'],
+            'name' => trim((string)($team['team_name'] ?? '')),
+        ];
+        if ($departmentId > 0) {
+            $departmentMap[$departmentId]['teams'][] = $teamNode;
+        } else {
+            $unassignedTeams[] = $teamNode;
+        }
     }
 
     $standaloneManagers = [];
@@ -160,14 +308,14 @@ function organization_tree(mysqli $db, int $companyId): array {
             $head = $managerIndex[$departmentHeadId] ?? null;
             if ($head) {
                 $departmentMap[$departmentId]['managers'] = array_values(array_filter($departmentMap[$departmentId]['managers'], fn($node) => (int)$node['id'] !== $departmentHeadId));
-                array_unshift($departmentMap[$departmentId]['managers'], $head);
+                $departmentMap[$departmentId]['head'] = $head;
             }
         }
     }
 
     $unassignedByDepartment = [];
     foreach ($employees as $employee) {
-        if ((int)($employee['manager_id'] ?? 0) > 0) continue;
+        if (isset($employeesRepresentedAsManagers[(int)$employee['id']]) || ($employeeManagerAssignments[(int)$employee['id']] ?? 0) > 0) continue;
         $departmentId = (int)($employee['department_id'] ?? 0);
         $person = [
             'id' => (int)$employee['id'],
@@ -183,11 +331,15 @@ function organization_tree(mysqli $db, int $companyId): array {
     }
 
     $departmentList = array_values($departmentMap);
-    if ($standaloneManagers || !empty($unassignedByDepartment[0])) {
-        $departmentList[] = ['id' => 0, 'name' => 'Unassigned leadership', 'manager_id' => 0, 'managers' => $standaloneManagers, 'unassigned_employees' => $unassignedByDepartment[0] ?? []];
+    if ($standaloneManagers || !empty($unassignedByDepartment[0]) || $unassignedTeams) {
+        $departmentList[] = ['id' => 0, 'name' => 'Unassigned', 'manager_id' => 0, 'head' => null, 'teams' => $unassignedTeams, 'managers' => $standaloneManagers, 'unassigned_employees' => $unassignedByDepartment[0] ?? []];
     }
 
-    return ['departments' => $departmentList];
+    return [
+        'company' => ['name' => $companyName],
+        'owner' => ['name' => 'Business owner', 'email' => trim((string)($owner['email'] ?? ''))],
+        'departments' => $departmentList,
+    ];
 }
 function module_config(string $key): array {
     $all = modules();
@@ -203,7 +355,9 @@ function reference_options(mysqli $db, int $companyId, string $type): array {
     if (!isset($map[$type])) throw new LogicException('Unknown reference type');
     [$table,$key,$label] = $map[$type];
     $options = [];
-    foreach (db_rows($db,"SELECT `$key` AS value, $label AS label FROM `$table` WHERE company_id = ? AND `$key` IS NOT NULL AND `$key` != '' ORDER BY label",[$companyId]) as $row) $options[(string)$row['value']] = $row['label'];
+    $activeManagers = $table === 'managers' ? " AND status NOT IN ('suspended','disabled','inactive')" : '';
+    $activeArchive = in_array($table,['employees','managers','projects'],true) ? ' AND archived_at IS NULL' : '';
+    foreach (db_rows($db,"SELECT `$key` AS value, $label AS label FROM `$table` WHERE company_id = ? AND `$key` IS NOT NULL AND `$key` != ''$activeManagers$activeArchive ORDER BY label",[$companyId]) as $row) $options[(string)$row['value']] = $row['label'];
     return $options;
 }
 function validate_record(mysqli $db, int $companyId, array $module, array $posted): array {
@@ -282,6 +436,12 @@ function validate_record(mysqli $db, int $companyId, array $module, array $poste
             }
         }
     }
+    }
+    if ($module['table'] === 'employees' && array_key_exists('github_login',$values)) {
+        // GitHub usernames link synced issues to people; stored without a leading @.
+        $login = ltrim(trim((string)$values['github_login']),'@');
+        $values['github_login'] = $login !== '' ? $login : null;
+        if ($login !== '' && !preg_match('/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/D',$login)) $errors['github_login'] = 'Enter a GitHub username: letters, numbers and single hyphens.';
     }
     if ($module['table'] === 'events') {
         if (($values['end_datetime'] ?? '') <= ($values['start_datetime'] ?? '')) $errors['end_datetime'] = 'The end time must be after the start time.';
@@ -369,7 +529,7 @@ function save_record(mysqli $db, int $companyId, string $key, array $values, ?in
         }
         if ($id !== null) {
             $current = db_one($db,"SELECT * FROM `$table` WHERE `$pk` = ? AND company_id = ? FOR UPDATE",[$id,$companyId]);
-            if (!$current) { $db->rollback(); fail('This record could not be found in your workspace.',404); }
+            if (!$current || !empty($current['archived_at'])) { $db->rollback(); fail('This record could not be found in your active workspace.',404); }
             if ($key === 'applications' && db_one($db,'SELECT application_id FROM application_submissions WHERE application_id = ? AND company_id = ?',[$id,$companyId])) { $db->rollback(); fail('Use the application review page to update a submitted application. Applicant details cannot be overwritten.',409); }
             if (!hash_equals(record_version($current),$version)) { $db->rollback(); fail('This record changed while you were editing it. Reload the page and review the latest version before saving.',409); }
             if ($key === 'jobs' && $values['status'] === 'published' && !$current['published_at']) $values['published_at'] = gmdate('Y-m-d H:i:s');
@@ -428,7 +588,7 @@ function record_cell_html(array $module, string $column, array $row, string $cur
 }
 function project_task_progress(mysqli $db, int $companyId): array {
     $progress = [];
-    foreach (db_rows($db,'SELECT p.id, COUNT(t.id) AS total, SUM(t.status = \'completed\') AS done FROM projects p JOIN tasks t ON ' . task_project_join() . ' WHERE p.company_id = ? GROUP BY p.id',[$companyId]) as $row) $progress[(int)$row['id']] = ['total'=>(int)$row['total'],'done'=>(int)$row['done']];
+    foreach (db_rows($db,'SELECT p.id, COUNT(t.id) AS total, SUM(t.status = \'completed\') AS done FROM projects p JOIN tasks t ON ' . task_project_join() . ' AND t.archived_at IS NULL WHERE p.company_id = ? AND p.archived_at IS NULL GROUP BY p.id',[$companyId]) as $row) $progress[(int)$row['id']] = ['total'=>(int)$row['total'],'done'=>(int)$row['done']];
     return $progress;
 }
 function progress_html(?array $progress): string {
@@ -447,7 +607,7 @@ function move_record_stage(mysqli $db, int $companyId, string $key, int $id, str
     if (!module_has_board($key) || $field === null) fail('Records in this tool cannot be moved between stages.',422);
     if (!in_array($stage, $module['fields'][$field]['options'], true)) fail('Choose one of the available stages.',422);
     $current = db_one($db,"SELECT * FROM `{$module['table']}` WHERE `{$module['pk']}` = ? AND company_id = ?",[$id,$companyId]);
-    if (!$current) fail('This record could not be found in your workspace.',404);
+    if (!$current || !empty($current['archived_at'])) fail('This record could not be found in your active workspace.',404);
     // Revalidate the whole record so a stage change cannot bypass the normal form rules.
     $posted = array_map(fn($value) => is_scalar($value) ? (string)$value : $value, $current);
     foreach ($module['fields'] as $name=>$definition) if (str_starts_with($definition['type'],'multi:')) $posted[$name] = json_decode((string)($current[$name] ?? '') ?: '[]', true) ?: [];

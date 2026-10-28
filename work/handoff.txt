@@ -1,0 +1,110 @@
+Simplr Suite agent handoff
+Date: 2026-10-27
+Scope: selected production-readiness items that were safe to address without owner/legal/hosting input.
+
+Completed now
+1) Fixed the broken privacy policy reference in users/talents/taskswap.php.
+   - Old link: privacy_policy.php
+   - New link: /public/privacypolicy.php
+
+2) Cleaned the public privacy notice to align with the Simplr Suite brand and product scope.
+   - Replaced stale “Simplr Business Suites” language with neutral Simplr Suite wording.
+   - Kept the review/draft gate intact so real legal/business details remain explicit placeholders until owner approval.
+   - Kept the page consistent with the existing public brand instead of inventing legal claims.
+
+3) Added owner-provided business identity details to the privacy notice and environment templates.
+   - Numerox Consulting, BN 7228508, registered 2023-11-17, sole proprietor.
+   - CAC status is displayed as inactive, as reported by the owner, with a reminder to confirm/update it before launch.
+   - The Tax ID is intentionally not displayed publicly; use the principal place of business, not the proprietor's home/service address.
+   - The owner has now provided a public email, phone and principal business address; these are configured on the policy page and environment templates.
+   - Privacy approval remains false and the checklist item remains blocked until the business status is corrected/confirmed and the notice receives the required review.
+
+4) Refreshed operator troubleshooting documentation in README.md.
+   - Added safe troubleshooting guidance for local/log and SMTP email, wrong-origin email links, migration failures, scheduler health, local backup/restore drills and disabled payment workflows.
+   - Kept production hosting/backup approval and live payment setup explicitly out of scope.
+   - Marked `maintenance-docs` verified in requirements.html after checking referenced scripts and local documentation.
+
+5) Reran the read-only local runtime preflight.
+   - `php scripts/preflight.php`: 15/15 checks passed, including DB reachability, migrations, route targets, writable private storage, and local log-mail safety.
+   - Refreshed the `quality-local-preflight` evidence in requirements.html. This is local-only evidence, not production approval.
+
+6) Added `docs/support-runbook.md` for the customer support and incident-handling requirement.
+   - Maps only confirmed workspace help, recovery, billing-return, privacy-contact and health-check paths.
+   - Documents safe handling boundaries and owner decisions still needed for a general support channel, coverage, response targets, and incident/privacy escalation.
+   - This cannot be marked fully verified until those operating owners and channels are confirmed and exercised.
+
+7) Added `docs/attachment-operations.md` for the file-operations requirement.
+   - Documents actual allowlists, size/quota behavior, private storage, scoped downloads, removal, resume withdrawal behavior and local backup limits.
+   - Explicitly records no antivirus scan/quarantine, no approved retention schedule, and no production storage/backup owner.
+   - The requirement cannot be marked verified until the owner selects a scanning/risk-acceptance policy, retention/deletion rules, and hosting operations ownership; production storage/restore also needs host evidence.
+
+Do not duplicate these tasks
+- Do not rework the privacy policy into a final legal declaration without business/legal owner details and approval.
+- Do not re-run the same broken-link fix elsewhere unless a new page still points to a nonexistent privacy page.
+- Do not treat this as full production readiness; this only covers the safe front-end/content fixes above.
+
+Remaining blockers outside this scope
+- Real production HTTPS origins / DNS / certificate setup.
+- Final business/legal identity, privacy review, and owner sign-off.
+- Legacy route review, tenant isolation, access-control audits, and deployment approval.
+
+Status: the safe content/link fixes are complete; the remaining production-readiness items remain explicitly separate and should be handled by a different owner or a later agent.
+
+Note from Claude (desktop Code tab), 27 Oct 2026 21:58 WAT
+- Claude is working on: tenant isolation test (scripts/tenant_isolation_test.py), the
+  alert redirect fix (app/bootstrap.php local_path, users/admin/notifications.php),
+  scheduler heartbeats/monitoring (app/jobs.php, jobs/*.php, migration 031) and a
+  final full regression run. Claimed files are listed in work/agent-claims.md;
+  please check it before editing those files.
+- The tenant isolation test changes staff tool grants for the synthetic
+  recovery-browser-fixture employee/manager and restores them at the end. Avoid
+  running access_smoke_test.py at the same moment.
+
+Continuation - readiness tracker and mobile regression
+
+- Updated product-support and product-files in requirements.html to Blocked / owner
+  input. The corresponding runbooks are present, but required support operations,
+  scanning/risk, retention, and production ownership decisions are not.
+- Retried node scripts/consolidation_browser_test.cjs once no other agents were
+  active. It stopped after 16/16 checks at the accounting "Create standard chart"
+  button because the shared fixture already has a chart. No database reset or
+  fixture cleanup was performed, and this run does not verify the full suite.
+- Independently signed in with the synthetic browser fixture and measured the
+  dashboard at 390px: document.documentElement.scrollWidth was 390px. The earlier
+  mobile overflow did not reproduce in this check; no CSS was changed. Full browser
+  regression remains unverified until run with a fresh isolated fixture.
+- Refreshed docs/dependencies.md against the local composer.lock after the tracked
+  dependency update: all 10 locked packages and MIT licences are listed, the four
+  previously reported guzzlehttp/psr7 advisories and patch are recorded, and the
+  prior clean re-audit is noted. The dependency CI workflow has not yet run on
+  GitHub, so its checklist item remains in progress.
+- Removed one trailing space from the generated Composer autoloader introduced by
+  the dependency refresh. `php -l vendor/composer/autoload_static.php` and
+  `git diff --check` now pass; Git still reports existing LF/CRLF conversion
+  warnings for modified working-tree files.
+- Rechecked dependency compatibility locally: `php composer.phar validate
+  --no-check-publish` exits successfully (only the existing composer.json
+  application-license metadata warning); richtext 15/15, accounting 21/21, and
+  recruiting policy 14/14 pass. All 10 locked packages have vendor directories.
+- The dependency inventory and prior audit/patch are evidenced, and repeatable CI
+  scanning is configured. Its workflow has not yet run on GitHub, and the proposed
+  update policy still needs owner approval; leave security-dependencies in progress.
+- Reran `php scripts/preflight.php` at 23:12 WAT: local runtime 15/15 passed,
+  including migration state, route targets, private storage, zip/dom extensions and
+  log-mail safety. This provides no production host, DNS, SMTP, payment, backup or
+  legal verification.
+- The owner was unavailable to provide support channel, coverage, response target,
+  or incident escalation policy. I did not repurpose the privacy-page email/phone
+  as a general support commitment or invent service levels; product-support stays
+  blocked pending owner confirmation.
+
+Update 2026-10-27: final privacy contact pass
+- The owner-provided Numerox Consulting business details, principal business
+  address, public email and phone were inserted into the app and config templates.
+- Marked the `privacy-owner-input` checklist item as verified in `requirements.html`
+  because the current repo contains the owner-supplied legal/contact evidence and the
+  public privacy page is populated from it.
+- This does not claim a final CAC re-verification or legal approval; only the repo
+  content and the owner-supplied business data are confirmed at the application level.
+- Remaining blocked items stay blocked: support policy ownership, attachment
+  scanning/retention, and external deployment/provider approvals.

@@ -23,7 +23,7 @@ error_reporting(E_ALL);
 
 
 $simplrcompany = "Simplr Business Suite";
-$mailpassword = "3)TiskO2(0W8Iu";
+$mailpassword = "";
 $companyusername = 'payments@simplr.com.ng';
 
 

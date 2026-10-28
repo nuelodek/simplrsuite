@@ -235,7 +235,7 @@ footer nav ul li a:hover {
                     <!-- Add PHP loop to fetch and display tasks from the database -->
                     <?php
                     // Assuming a connection to the database has been established
-                    $query = "SELECT * FROM tasks ORDER BY created_at DESC LIMIT 4";
+                    $query = "SELECT * FROM tasks WHERE archived_at IS NULL ORDER BY created_at DESC LIMIT 4";
                     $result = mysqli_query($conn, $query);
                     while($task = mysqli_fetch_assoc($result)) {
                         echo "<div class='task-card'>";
@@ -293,7 +293,7 @@ footer nav ul li a:hover {
             <p>&copy; 2024 TaskSwap. All rights reserved.</p>
             <nav>
                 <ul>
-                    <li><a href="privacy_policy.php">Privacy Policy</a></li>
+                    <li><a href="/public/privacypolicy.php">Privacy Policy</a></li>
                     <li><a href="terms_of_service.php">Terms of Service</a></li>
                     <li><a href="contact_us.php">Contact Us</a></li>
                 </ul>

@@ -40,7 +40,7 @@
 
     <script>
     // Replace with your actual Paystack secret key
-    const PAYSTACK_SECRET_KEY = 'sk_live_89ce8303adb74e9e95dd0401fceb9147f5c6f696';
+    const PAYSTACK_SECRET_KEY = '';
 
     // Function to create a customer on Paystack
     const createCustomer = async (email, firstName, lastName, phone) => {

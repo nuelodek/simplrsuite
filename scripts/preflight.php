@@ -9,7 +9,7 @@ function check_requirement(string $name, bool $ok, string $action = ''): void {
     global $checks; $checks[] = ['name'=>$name,'passed'=>$ok,'action'=>$ok ? '' : $action];
 }
 check_requirement('PHP 8.2 or newer',PHP_VERSION_ID >= 80200,'Upgrade PHP.');
-foreach (['mysqli','mysqlnd','mbstring','openssl','curl','fileinfo','session'] as $extension) check_requirement('PHP extension: ' . $extension,extension_loaded($extension),'Enable this extension.');
+foreach (['mysqli','mysqlnd','mbstring','openssl','curl','fileinfo','session','zip','dom'] as $extension) check_requirement('PHP extension: ' . $extension,extension_loaded($extension),'Enable this extension.');
 try {
     $db = database();
     check_requirement('Database reachable',true);

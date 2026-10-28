@@ -18,7 +18,7 @@ function flutterwave_api(string $method, string $path, array $data = [], ?callab
         if (PHP_SAPI !== 'cli') throw new LogicException('Test transports are CLI-only.');
         $response = $transport($method,$path,$data);
     } else {
-        $handle = curl_init('https://api.flutterwave.com/v3' . $path);
+        $handle = secure_curl(curl_init('https://api.flutterwave.com/v3' . $path));
         curl_setopt_array($handle,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_HTTPHEADER=>['Authorization: Bearer ' . config('FLUTTERWAVE_SECRET_KEY'),'Content-Type: application/json'],CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
         if ($method === 'POST') curl_setopt($handle,CURLOPT_POSTFIELDS,json_encode($data,JSON_THROW_ON_ERROR));
         $raw = curl_exec($handle); $status = (int)curl_getinfo($handle,CURLINFO_RESPONSE_CODE); curl_close($handle);
