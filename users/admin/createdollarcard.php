@@ -2,8 +2,8 @@
 
 // transfer tp environment variables
 $apiBaseUrl = "https://sandbox-api.marqeta.com/v3";
-$apiUsername = "4be98e4f-1478-49f5-b62d-2125bf50dca0";
-$apiPassword = "cac54a61-a959-4ca9-a12c-1639c71e46eb";
+$apiUsername = "";
+$apiPassword = "";
 
 // Create a user
 $createUserUrl = $apiBaseUrl . "/users";

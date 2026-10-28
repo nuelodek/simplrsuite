@@ -18,9 +18,17 @@ repository, so treat every one as compromised.
 | Paystack test secret and public keys | `users/admin/simplrduplo.php`, `users/admin/intialiazepayment.js` | Regenerate the test keys on the same page. |
 | Unit (banking) API tokens | `users/admin/createusbankaccount.php`, `users/talents/unitbankdemo.php` | Revoke the tokens in the Unit dashboard, or close the Unit account if it is no longer used. |
 | Sentry DSN | `users/admin/sentryinitialize.php` | Sentry → project settings → Client Keys: revoke the key (or delete the project if unused). |
-| An email account password | `toolkits/acct_payroll/recordpayment.php`, `users/admin/processtools.php`, `users/admin/revoketools.php` (same password three times) | Change that mailbox's password. It is **not** the SMTP login currently configured in `.env.local` (checked without revealing either). |
+| An email account password | `toolkits/acct_payroll/recordpayment.php`, `users/admin/processtools.php`, `users/admin/revoketools.php` (same password three times) | Change that mailbox's password. It is **not** the SMTP login currently configured in `.env` (checked without revealing either). |
 | Flutterwave keys | public keys in `users/admin/renewsubscription.php`, `subpro.php`, `intialiazepayment.js`; secret-key patterns in 12 historical commits | Regenerate Flutterwave keys before going live. |
 | Google API key | 2 historical commits only | Restrict or delete the key in Google Cloud Console → Credentials. |
+| **Marqeta API login and webhook login** | `users/admin/createdollarcard.php`, `users/admin/marquettawebhook.php` | Rotate both in the Marqeta dashboard; the API login can issue cards. Found 28 Oct. |
+| Older GitHub OAuth client secret | `superadmin/gitauth.php` | GitHub → Settings → Developer settings → OAuth Apps: delete old client secrets you no longer use (the current secret in `.env` is different). |
+| CurrencyAPI key | `users/admin/subpro.php` | Regenerate the key at currencyapi.com, or delete the account if unused. |
+| Two older mail usernames | `toolkits/acct_payroll/recordpayment.php`, `users/admin/processtools.php`, `users/admin/revoketools.php` | Covered by the mailbox password change above; close those mailboxes if unused. |
+
+All of these values now live in `.env` (sections "Older credentials" and "Moved out of
+legacy source files") so you can see them in one place while rotating. Delete each line
+from `.env` once its key has been revoked.
 
 Then:
 - [ ] Put the new keys only in the server's private `.env` (never in code).

@@ -1,14 +1,13 @@
 <?php
 declare(strict_types=1);
 
-// Environment variables supplied by the host take precedence over local files.
+// Settings come from the single git-ignored .env file; environment variables
+// supplied by the host take precedence over it.
 const SIMPLR_ROOT = __DIR__ . '/..';
 global $simplrConfig;
 $simplrConfig = [];
-foreach (['.env', '.env.local'] as $configFile) {
-    $path = SIMPLR_ROOT . '/' . $configFile;
-    if (!is_file($path)) continue;
-    foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+if (is_file(SIMPLR_ROOT . '/.env')) {
+    foreach (file(SIMPLR_ROOT . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (str_starts_with(ltrim($line), '#') || !str_contains($line, '=')) continue;
         [$name, $value] = explode('=', $line, 2);
         $simplrConfig[trim($name)] = trim(trim($value), "\"'");

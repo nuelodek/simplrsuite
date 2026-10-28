@@ -108,7 +108,7 @@ $subscription = $result->fetch_assoc();
             const amount = costPerMonth * months;
 
             FlutterwaveCheckout({
-                public_key: "FLWPUBK_TEST-acc539ebd2b1244fcf32835b66301422-X",
+                public_key: "",
                 tx_ref: "renewal_" + Date.now(),
                 amount: amount,
                 currency: currency,

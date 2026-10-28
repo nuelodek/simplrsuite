@@ -24,7 +24,7 @@ error_reporting(E_ALL);
 
 $simplrcompany = "Simplr Business Suite";
 $mailpassword = "";
-$companyusername = 'payments@simplr.com.ng';
+$companyusername = '';
 
 
 // Get the form data

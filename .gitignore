@@ -4,7 +4,6 @@ videouploads.php
 .qodo
 .env
 .env.*
-!.env.example
 .local/
 storage/
 work/test-results/

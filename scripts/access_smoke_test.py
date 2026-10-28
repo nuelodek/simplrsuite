@@ -16,7 +16,7 @@ import uuid
 ROOT = Path(__file__).resolve().parent.parent
 BASE = 'http://127.0.0.1:8000'
 checks = []
-local = (ROOT / '.env.local').read_text()
+local = (ROOT / '.env').read_text()
 assert re.search(r'^APP_ENV=local$',local,re.M) and re.search(r'^MAIL_TRANSPORT=log$',local,re.M)
 
 def expect(condition, label):

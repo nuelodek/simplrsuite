@@ -43,7 +43,7 @@ by this server-side hosted-checkout flow. A Paystack test secret was also found
 hardcoded in legacy source; treat it as exposed and do not reuse it. No Flutterwave
 v3 test secret or webhook hash was found. Neither provider has been enabled or
 charged. Issue fresh sandbox credentials and configure them only in the ignored
-local `.env.local` (or the deployment secret store); never paste them into chat,
+local `.env` (or the deployment secret store); never paste them into chat,
 source files, or commit history.
 
 ## Deployment configuration

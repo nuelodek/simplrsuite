@@ -15,9 +15,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 BASE = 'http://127.0.0.1:8000'
-local = (ROOT / '.env.local').read_text()
+local = (ROOT / '.env').read_text()
 if not re.search(r'^APP_ENV=local$', local, re.M) or not re.search(r'^MAIL_TRANSPORT=log$', local, re.M):
-    sys.exit('Refusing to test without APP_ENV=local and MAIL_TRANSPORT=log in .env.local.')
+    sys.exit('Refusing to test without APP_ENV=local and MAIL_TRANSPORT=log in .env.')
 checks = []
 
 

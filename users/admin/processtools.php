@@ -16,7 +16,7 @@ error_reporting(E_ALL);
 
 $simplrcompany = "Simplr Business Suite";
 $mailpassword = "";
-$companyusername = 'superadmin@simplr.com.ng';
+$companyusername = '';
 
 $email = $_POST['email'];
 $company_id = $_POST['company_id'];

@@ -14,7 +14,7 @@ use PHPMailer\PHPMailer\Exception;
 
 $simplrcompany = "Simplr Business Suite";
 $mailpassword = "";
-$companyusername = 'business@simplr.com.ng';
+$companyusername = '';
 
 // Check if required POST variables are set
 if (isset($_POST['revoke']) && isset($_POST['employee_id']) && isset($_POST['tool_ids']) && isset($_POST['company_id'])) {

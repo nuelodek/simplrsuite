@@ -15,7 +15,7 @@ async function localOnly(context) {
   });
 }
 (async () => {
-  const config = fs.readFileSync(path.join(root,'.env.local'),'utf8');
+  const config = fs.readFileSync(path.join(root,'.env'),'utf8');
   assert.match(config,/^APP_ENV=local$/m); assert.match(config,/^MAIL_TRANSPORT=log$/m);
   const browser = await chromium.launch({headless:true, ...(fs.existsSync(chromium.executablePath()) ? {} : {channel:'msedge'})});
   try {

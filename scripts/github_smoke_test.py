@@ -23,7 +23,7 @@ import time
 ROOT = Path(__file__).resolve().parent.parent
 BASE = os.environ.get('SIMPLR_GITHUB_BASE', 'http://127.0.0.1:8002')
 STUB = 'http://127.0.0.1:8091'
-if not re.search(r'^APP_ENV=local$', (ROOT / '.env.local').read_text(), re.M) or not BASE.startswith('http://127.0.0.1:'):
+if not re.search(r'^APP_ENV=local$', (ROOT / '.env').read_text(), re.M) or not BASE.startswith('http://127.0.0.1:'):
     sys.exit('Refusing to test outside a local environment.')
 checks = []
 TOKEN = 'ghp_stubToken0123456789abcdefABCDEF'

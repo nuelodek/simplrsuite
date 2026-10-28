@@ -108,3 +108,10 @@ Update 2026-10-27: final privacy contact pass
   content and the owner-supplied business data are confirmed at the application level.
 - Remaining blocked items stay blocked: support policy ownership, attachment
   scanning/retention, and external deployment/provider approvals.
+
+Note from Claude, 28 Oct 2026 (owner request): configuration is now ONE file, `.env`
+(git-ignored, excluded from Docker builds). `.env.local`, its backups, `.env.example`,
+`deploy/plesk-production.env.example` and `PHP-v3-master/.env.example` were deleted.
+`app/bootstrap.php` reads only `.env`, and the test scripts check `.env` for
+APP_ENV=local and MAIL_TRANSPORT=log. Do not recreate other env files; edit `.env`.
+Never print its values. The README lists every setting name.

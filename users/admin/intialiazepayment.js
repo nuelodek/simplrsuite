@@ -35,7 +35,7 @@
 
   function initializeFlutterwavePayment(paymentData) {
       FlutterwaveCheckout({
-          public_key: "FLWPUBK_TEST-acc539ebd2b1244fcf32835b66301422-X",
+          public_key: "",
           tx_ref: generateReference(),
           amount: paymentData.amount,
           currency: paymentData.currency,
@@ -55,7 +55,7 @@
 
   function initializePaystackPayment(paymentData) {
       const paystackData = {
-          key: 'pk_test_f876d90c9eb13c92484294bfe44e46fce3b1ed0c',
+          key: '',
           email: paymentData.customer.email,
           amount: paymentData.amount * 100,
           currency: paymentData.currency,

@@ -24,33 +24,39 @@ These origins also route account-email links to the correct audience. When unset
 account mail keeps using `APP_URL`. Cookies remain host-only. DNS, certificates,
 and live hosting have not been changed or verified.
 
-For a multi-domain Plesk deployment, [deploy/plesk-production.env.example](./deploy/plesk-production.env.example)
-is a secret-free starting template for the configured production origins:
+For a multi-domain Plesk deployment, the configured production origins are
 `APP_URL=https://vigorous-swartz.161-97-144-85.plesk.page`,
 `APP_BUSINESS_URL=https://business.simplr.com`,
 `APP_TALENT_URL=https://talents.simplr.com`, and
 `APP_WORK_URL=https://work.simplr.com`.
-Configure the values in Plesk or copy the template to a private server-side
-`.env.local`; replace every `SET_IN_PLESK` placeholder and provide real secrets
-only through the server's private configuration. Do not commit `.env.local`. The
-template keeps payment providers disabled and does not deploy the app or verify
-the host.
+Set them, with `APP_ENV=production` and the real secrets, in Plesk or in a private
+server-side `.env`. Never commit `.env`. Keep payment providers disabled until the
+owner approves live billing.
 
 ## Local setup
 
 Requirements: PHP 8.2+ with `mysqli`, `mysqlnd`, `mbstring`, `openssl`, `curl`,
-`fileinfo` and sessions;
+`fileinfo`, `zip`, `dom` and sessions;
 MySQL 8.4 or a compatible MySQL/MariaDB server. MySQL 8.4 is the verified local
 database. No JavaScript build step is needed.
 
 1. Create an empty database and a database user. Do not import the historical
    SQL dumps: they contain old application records, not installation fixtures.
-2. Copy `.env.example` to `.env.local` and set `DB_HOST`, `DB_PORT`,
-   `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD`. Host environment variables
-   override file configuration. `.env.local` overrides `.env`.
-   Any `LEGACY_DB_*` values in `.env.local` are reference-only; the application
-   and migration runner use `DB_*` and must remain pointed at the isolated
-   development database.
+2. Create `.env` in the project root (it is git-ignored and is the only
+   configuration file) and set `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`,
+   and `DB_PASSWORD`. Host environment variables override file configuration.
+   Other settings the app reads, all optional locally: `APP_URL`,
+   `APP_BUSINESS_URL`, `APP_TALENT_URL`, `APP_WORK_URL`, `APP_TIMEZONE`, `APP_KEY`;
+   `MAIL_TRANSPORT`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `SMTP_HOST`, `SMTP_PORT`,
+   `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_ENCRYPTION`; `GITHUB_CLIENT_ID`,
+   `GITHUB_CLIENT_SECRET`, `GITHUB_SYNC_MINUTES`, `CURL_CA_BUNDLE`;
+   `PAYSTACK_ENABLED`, `PAYSTACK_MODE`, `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_ENABLED`,
+   `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_HASH`, `BILLING_USD_RATE`,
+   `BILLING_ENFORCE`; the `LINKEDIN_*`, `FACEBOOK_*` and `INSTAGRAM_*` job-posting
+   keys; and the `PRIVACY_*` business identity. Leave unused settings out (or
+   commented): a blank line overrides the built-in default.
+   Any `LEGACY_DB_*` values are reference-only; the application and migration
+   runner use `DB_*` and must remain pointed at the isolated development database.
 3. For local testing, use `APP_ENV=local`, `APP_URL=http://127.0.0.1:8000`, and
    `MAIL_TRANSPORT=log`. Test emails are written to `storage/mail/`, which the
    development router and Apache rules prevent from being served.

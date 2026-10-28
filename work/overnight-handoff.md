@@ -1,5 +1,17 @@
 # Simplr Suite overnight continuation
 
+## Configuration consolidated into `.env` (28 October 2026, Claude, owner request)
+
+Only `.env` remains (git-ignored, excluded from Docker builds). It holds the former
+`.env.local` values verbatim (active), the business identity for the privacy notice,
+the older July 2025 credentials, credentials moved out of legacy files (Marqeta
+webhook login, CurrencyAPI key, two mail usernames), and every other setting
+commented out. The loader (`app/bootstrap.php`) and the six test scripts read only
+`.env`. Deleted: `.env.local`, its backups (project and Temp), `.env.example`,
+`deploy/plesk-production.env.example`, `PHP-v3-master/.env.example`. Checks after the
+change: health 200, migrations up to date, preflight 15/15, rich text 15, accounting
+21, session hardening 23/23.
+
 ## Evening continuation — production-readiness items (27 October 2026, Claude)
 
 Requested: pick the `requirements.html` items that can be solved now, record them
@@ -231,7 +243,7 @@ a location. Updates appear in both accounts; interview email is not sent.
   lacks a company/thread scope, so the old chat is not safe to copy directly.
 - The user created the isolated `simplr_dev` database. The canonical schema and
   all 17 migrations, including `017_application_interviews.sql`, are installed
-  there. The active local app connects on port 3306 as `simplrco_simplr`; the
+  there. The active local app connects on port 3306 as the configured database user; the
   account has broad MySQL privileges, so keep this use confined to local
   development and use a database-scoped account in production. `simplrco_dashboard`
   remains untouched.
@@ -1035,3 +1047,18 @@ readiness and provider activation.
   for `scripts/projdashboard.js` and `scripts/messages.js`; scoped
   `git diff --check` passed. These focused checks do not close the full-suite
   gate or production-only requirements.
+
+## Local backup/restore drill — 28 Oct 2026 (Copilot)
+
+- Ran `php scripts/backup_restore_drill.php 'C:\Program Files\Ampps\mysql\bin'`.
+  The script's guard confirmed the local-only environment (`APP_ENV=local`,
+  log mail, localhost MySQL, `simplr_dev` source database).
+- Drill passed: **111 tables**, **3,442 rows**, and **7 attachments** restored;
+  table counts/checksums and attachment hashes matched; source remained
+  unchanged. The counts-only result is in `work/test-results/backup-restore.json`.
+- Removed only the exact generated `simplr_restore_*` test database and its
+  private `.local/backup-drills/20261028_063654_d3e2b8` directory after
+  verification; retained the report. This demonstrates a local snapshot
+  restore only. It does not configure or verify production backup scheduling,
+  off-host encryption/access, retention, alerts, or owner-approved RPO/RTO.
+  Updated `deploy-backup` to `in-progress`, not verified.

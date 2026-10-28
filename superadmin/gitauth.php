@@ -4,7 +4,7 @@ if (isset($_GET['code'])) {
     
     // 
     $client_id = 'Ov23lisGRPsNohh2HiYi';
-    $client_secret = '66b440e6a9f9294fb7c95d27b83bc9f771b4304a';
+    $client_secret = 'a';
     $redirect_uri = 'https://simplr.com.ng/gitcallback.php';
 
     // Exchange the code for an access token

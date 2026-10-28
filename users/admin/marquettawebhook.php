@@ -1,8 +1,8 @@
 <?php
 // Webhook setup for Simplr
 $webhookUrl = "https://your-simplr-webhook-endpoint.com";
-$webhookUsername = "your_username";
-$webhookPassword = "Y0ur_Str0ng_P@ssw0rd!";
+$webhookUsername = "";
+$webhookPassword = "";
 
 // Webhook payload
 $webhookData = json_encode([

@@ -244,7 +244,7 @@ require '../../sql_queries/db.php';
     let selectedCurrency = 'NGN'; // Default currency
 
     function fetchCurrencyRates() {
-        const apiKey = 'cur_live_F1DdaJg1hYAFLApVXkRQEGZRLCxokafvJxC16XTC';
+        const apiKey = '';
         fetch(`https://api.currencyapi.com/v3/latest?apikey=${apiKey}&base=USD`)
             .then(response => response.json())
             .then(data => {
@@ -348,7 +348,7 @@ require '../../sql_queries/db.php';
         const logo = "https://growsocial.com.ng/black_white_grow_logo__1_-removebg-preview.png";
 
         FlutterwaveCheckout({
-            public_key: "FLWPUBK_TEST-acc539ebd2b1244fcf32835b66301422-X",
+            public_key: "",
             tx_ref: generateReference(),
             amount: amount,
             currency: currency,

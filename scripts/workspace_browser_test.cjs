@@ -12,7 +12,7 @@ const staff = JSON.parse(fs.readFileSync(path.join(root,'.local/recovery-browser
 const access = JSON.parse(fs.readFileSync(path.join(root,'.local/access-browser-fixture.json')));
 const help = JSON.parse(fs.readFileSync(path.join(root,'.local/help-browser-fixture.json')));
 const attachments = JSON.parse(fs.readFileSync(path.join(root,'.local/attachments-browser-fixture.json')));
-const config = fs.readFileSync(path.join(root,'.env.local'),'utf8');
+const config = fs.readFileSync(path.join(root,'.env'),'utf8');
 assert.match(config,/^APP_ENV=local$/m); assert.match(config,/^MAIL_TRANSPORT=log$/m);
 (async()=>{
   const browser = await chromium.launch({headless:true,...(fs.existsSync(chromium.executablePath()) ? {} : {channel:'msedge'})});

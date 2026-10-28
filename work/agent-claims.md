@@ -287,10 +287,12 @@ operations requirement remains blocked.
 
 ## Copilot — scheduler-monitoring tracker reconciliation, 28 Oct 2026
 
-Status: **local evidence reconciled; talent browser journey, production/staging monitoring and the complete suite remain open.**
+Status: **local backup restore verified; production backup policy, talent browser journey, production/staging monitoring and the complete suite remain open.**
 Reviewed the existing scheduler status script and operator runbook, ran the
 read-only local status command, reconciled the stale full-suite tracker note,
 reconciled the current synthetic talent-suite evidence, and updated tracker
-notes/handoff. Re-ran focused rich-text, accounting and recruiting unit checks
-(15/15, 21/21, 14/14) and JavaScript syntax checks. No jobs or external alerts
-were started.
+notes/handoff. Ran the guarded local backup/restore drill (111 tables,
+3,442 rows, 7 attachments; checksums matched) and cleaned its generated restore
+database and temporary backup directory. Re-ran focused rich-text, accounting
+and recruiting unit checks (15/15, 21/21, 14/14) and JavaScript syntax checks.
+No jobs or external alerts were started.
