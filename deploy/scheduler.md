@@ -47,11 +47,13 @@ user can write:
 */15 * * * * cd /srv/simplrsuite && timeout 14m php jobs/github-sync.php >> /var/log/simplr/github-sync.log 2>&1
 # Scheduler health check: alerts when a job is late, stuck, failing or never ran
 */5 * * * *  cd /srv/simplrsuite && php scripts/scheduler_status.php --quiet || <your alert command>
+# Wider health check: database, migrations, email outbox, payments, disk, backups, errors
+*/5 * * * *  cd /srv/simplrsuite && php scripts/ops_check.php --quiet || <your alert command>
 ```
 
 `<your alert command>` is whatever pages the on-call person, for example a mail
 command to an operations mailbox or a webhook call. `--quiet` prints nothing when
-everything is healthy and prints the failing jobs otherwise, so the output can go into
+everything is healthy (both checks) and prints the failing jobs otherwise, so the output can go into
 the alert. Rotate the two log files with logrotate (weekly, keep eight weeks is a
 reasonable start).
 

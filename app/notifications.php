@@ -42,8 +42,11 @@ function notification_link(string $url): string {
     return $base . ($url !== '' ? $url : '/users/admin/notifications.php');
 }
 function notification_deliver(mysqli $db, int $notificationId): string {
+    // Claim the message before sending, so a web request and the scheduler never both send it.
+    // A claim older than ten minutes belongs to a run that died mid-send and may be retried.
+    $claim = db_run($db,"UPDATE notifications SET email_status = 'sending', email_claimed_at = UTC_TIMESTAMP() WHERE id = ? AND (email_status IN ('pending','failed') OR (email_status = 'sending' AND email_claimed_at < UTC_TIMESTAMP() - INTERVAL 10 MINUTE))",[$notificationId]);
     $row = db_one($db,'SELECT * FROM notifications WHERE id = ?',[$notificationId]);
-    if (!$row || !in_array($row['email_status'],['pending','failed'],true)) return (string)($row['email_status'] ?? 'missing');
+    if (!$row || $claim->affected_rows !== 1) return (string)($row['email_status'] ?? 'missing');
     $mode = notification_email_mode($db,(int)$row['company_id'],$row['recipient_role'],(int)$row['recipient_id']);
     $contact = recipient_contact($db,(int)$row['company_id'],$row['recipient_role'],(int)$row['recipient_id']);
     $status = match (true) {
@@ -81,7 +84,7 @@ function notification_flush_outbox(mysqli $db): array {
     $result = ['sent'=>0,'failed'=>0,'skipped'=>0,'digest'=>0];
     $lastId = 0;
     do {
-        $rows = db_rows($db,"SELECT id FROM notifications WHERE id > ? AND (email_status = 'pending' OR (email_status = 'failed' AND email_attempts < 3)) AND created_at > UTC_TIMESTAMP() - INTERVAL 2 DAY ORDER BY id LIMIT 500",[$lastId]);
+        $rows = db_rows($db,"SELECT id FROM notifications WHERE id > ? AND (email_status = 'pending' OR (email_status = 'failed' AND email_attempts < 3) OR (email_status = 'sending' AND email_claimed_at < UTC_TIMESTAMP() - INTERVAL 10 MINUTE)) AND created_at > UTC_TIMESTAMP() - INTERVAL 2 DAY ORDER BY id LIMIT 500",[$lastId]);
         foreach ($rows as $row) {
             $lastId = (int)$row['id'];
             $status = notification_deliver($db,$lastId);

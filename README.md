@@ -202,6 +202,8 @@ to one per task per local day. The job also retries the email outbox and sends
 digests. Configure `APP_URL` as an HTTPS origin before enabling SMTP.
 Both jobs record a heartbeat; `php scripts/scheduler_status.php` exits 1 when a job
 is late, stuck or failing, so it can drive an alert. See `deploy/scheduler.md`.
+`php scripts/ops_check.php` adds database, migration, email outbox, payment, disk,
+backup and error-rate checks; `deploy/incident-runbook.md` says what to do per alert.
 
 An authorised workspace owner or manager can issue a written query about a
 task or project. Select several eligible people or the whole eligible project

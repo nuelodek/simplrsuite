@@ -287,12 +287,36 @@ operations requirement remains blocked.
 
 ## Copilot — scheduler-monitoring tracker reconciliation, 28 Oct 2026
 
-Status: **local backup restore verified; production backup policy, talent browser journey, production/staging monitoring and the complete suite remain open.**
+Status: **local backup restore and synthetic recruiting journey verified; full current suite, production backup policy, talent retention decision and production/staging monitoring remain open.**
 Reviewed the existing scheduler status script and operator runbook, ran the
 read-only local status command, reconciled the stale full-suite tracker note,
 reconciled the current synthetic talent-suite evidence, and updated tracker
 notes/handoff. Ran the guarded local backup/restore drill (111 tables,
 3,442 rows, 7 attachments; checksums matched) and cleaned its generated restore
 database and temporary backup directory. Re-ran focused rich-text, accounting
-and recruiting unit checks (15/15, 21/21, 14/14) and JavaScript syntax checks.
+and recruiting-policy unit checks (15/15, 21/21, 14/14) and JavaScript syntax
+checks. Ran `python scripts/recruiting_smoke_test.py` (149/149) and
+`node scripts/recruiting_browser_test.cjs` (35/35); fixed stale-fixture
+selection and ensured browser-test cleanup navigates to the generated job edit
+form. The corrected test closed its synthetic job. Reconciled the conflicting
+`quality-full-suite` marker conservatively to `in-progress`; historical
+regression evidence and these new focused runs are not a complete current rerun.
 No jobs or external alerts were started.
+
+## Claude — fourth batch, 28 Oct 2026 (finished; claims released)
+
+| Requirement | What I am doing |
+| --- | --- |
+| Review injection, XSS, CSRF, SSRF and upload boundaries (HIGH) | Output-escaping audit of every routable page (static scan for unescaped echo), SQL-construction scan, redirect scan; fix findings; add the audit as a repeatable test. |
+| Add operational monitoring, alerting and incident procedures (HIGH) | `scripts/ops_check.php` (database, scheduler lag, failed alert emails, payment webhook failures, storage space, recent PHP errors) for cron alerting, plus `deploy/incident-runbook.md`. |
+| Verify atomicity, uniqueness and idempotency (HIGH), invitation and outbox part | Concurrent invitation acceptance and concurrent outbox flush tests. |
+
+Files: new `scripts/output_audit_test.php`, `scripts/ops_check.php`,
+`scripts/idempotency_test.py`, `deploy/incident-runbook.md`; fixes only where the
+audit finds a defect (each file listed here before editing). Not touching Copilot's
+accessibility, role-transition or tracker-reconciliation work.
+Also done: removed two empty folders (`mediawiki-php-excimer/`, `vendor/bin/`).
+Also editing (findings): `users/help.php` (one e() wrap), `app/notifications.php`
+(`notification_deliver` claims a message before sending; flush retries stale claims),
+new migration `032_notification_send_claim.sql`, `deploy/scheduler.md` and README
+(ops_check cron line).

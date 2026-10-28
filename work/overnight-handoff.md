@@ -1,5 +1,30 @@
 # Simplr Suite overnight continuation
 
+## Fourth batch — security output, monitoring, idempotency (28 October 2026, Claude)
+
+- **Output escaping:** `scripts/output_audit_test.php` tokenises all 197 reachable
+  pages and `app/` files and flags any echo of a variable, interpolated string or
+  unknown function result. 71 findings reviewed with reasons in the file (fixed lists,
+  integers, allowlisted values, ICS text); 0 open; a planted `<?= $_GET[...] ?>` is
+  caught. New output must use `e()` or be added to the reviewed list. Request input
+  reaches SQL only as bound parameters; no redirect uses raw input. Defence in depth:
+  `users/help.php` now escapes the comment author role.
+- **Monitoring:** `scripts/ops_check.php` (cron every 5 minutes, exit 1 on alert)
+  checks database, pending migrations, jobs, email outbox (stuck or given up),
+  payment verification mismatches and unknown-state orders, disk space, storage
+  writability, backup age (`BACKUP_DIR`) and error bursts (`PHP_ERROR_LOG`). Runbook:
+  `deploy/incident-runbook.md`. Locally it reports C: at about 2% free (3.7 GB).
+- **Duplicate emails fixed:** `notification_deliver()` read the status, sent, then
+  updated, so a web request and the scheduler could both send the same alert. Racing
+  six senders on the old code produced 6 emails for one alert. It now claims the row
+  (`email_status='sending'`, migration `032_notification_send_claim.sql`) and only the
+  claimant sends; claims older than ten minutes are retried by the outbox flush.
+  `scripts/idempotency_test.py` 31/31 also shows five concurrent invitation
+  acceptances create one account (the existing row lock already handled it).
+- Removed two empty folders (`mediawiki-php-excimer/`, `vendor/bin/`).
+- Migration matrix rerun with 032: 74/74 (963 s); 032 joins the list of migrations
+  that must not be replayed by hand (14 in total).
+
 ## Configuration consolidated into `.env` (28 October 2026, Claude, owner request)
 
 Only `.env` remains (git-ignored, excluded from Docker builds). It holds the former
@@ -1062,3 +1087,33 @@ readiness and provider activation.
   restore only. It does not configure or verify production backup scheduling,
   off-host encryption/access, retention, alerts, or owner-approved RPO/RTO.
   Updated `deploy-backup` to `in-progress`, not verified.
+
+## Recruiting browser and application journey — 28 Oct 2026 (Copilot)
+
+- `python scripts/recruiting_smoke_test.py` passed **149/149** using synthetic
+  example.test accounts and log-only mail. It exercises application consent,
+  validated private resume upload/download, tenant and role denial, employer
+  review, interviews, withdrawal, and the post-withdrawal access rules. As
+  designed, it leaves a synthetic active application and closed job for the
+  browser suite.
+- `node scripts/recruiting_browser_test.cjs` passed **35/35**. It verifies
+  the owner posting form, login return to the intended job, public job and
+  candidate application journey, employer stage update, candidate withdrawal,
+  browser errors, and 390px/desktop width on recruiting surfaces. The
+  generated test job was closed.
+- The first browser attempt exposed two harness issues, not application
+  failures: a stale fixture application ID and cleanup reading a CSRF token
+  from whichever page happened to be open. The browser test now validates the
+  application it just created and navigates to its own job edit form before
+  cleanup. The failed run's synthetic job was closed explicitly; the corrected
+  run passed.
+- Updated the talent tracker evidence. Kept `identity-talent` in progress
+  because the owner has not approved the required resume/profile retention and
+  deletion policy. A talent profile cannot upload a resume, but application
+  submissions do support private, validated resume files.
+- The tracker had become inconsistent: `quality-full-suite` was marked
+  verified while the preceding handoff text said the complete current suite
+  was still open. With no authoritative reconciliation available, restored
+  the conservative `in-progress` status and made the tracker note explicit:
+  the new 149/149 and 35/35 recruiting checks and backup restore drill are
+  additional evidence, not a full-suite rerun.
