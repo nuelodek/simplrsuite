@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/access.php';
 require_once __DIR__ . '/richtext.php';
+require_once __DIR__ . '/webhooks.php';
 // This allowlist is shared by the HTML workspace and its record API. SQL identifiers
 // are never accepted from a request. Existing tables remain the source of truth.
 function field(string $label, string $type = 'text', bool $required = true, int $max = 255, array $options = []): array {
@@ -527,6 +528,7 @@ function save_record(mysqli $db, int $companyId, string $key, array $values, ?in
             }
             unset($values['meeting_provider']);
         }
+        $webhookAction = $id !== null ? 'updated' : 'created';
         if ($id !== null) {
             $current = db_one($db,"SELECT * FROM `$table` WHERE `$pk` = ? AND company_id = ? FOR UPDATE",[$id,$companyId]);
             if (!$current || !empty($current['archived_at'])) { $db->rollback(); fail('This record could not be found in your active workspace.',404); }
@@ -535,6 +537,7 @@ function save_record(mysqli $db, int $companyId, string $key, array $values, ?in
             if ($key === 'jobs' && $values['status'] === 'published' && !$current['published_at']) $values['published_at'] = gmdate('Y-m-d H:i:s');
             $assignments = implode(', ',array_map(fn($column)=>"`$column` = ?",array_keys($values)));
             db_run($db,"UPDATE `$table` SET $assignments WHERE `$pk` = ? AND company_id = ?",[...array_values($values),$id,$companyId]);
+            webhook_queue_record($db,$companyId,$key,$id,$webhookAction,$values);
             if ($key === 'jobs' && ($values['status'] ?? 'draft') === 'published' && !empty($values['social_targets'] ?? '')) queue_social_sync($db,$companyId,$id,$values['social_targets']);
         } else {
             $values['company_id'] = $companyId;
@@ -550,6 +553,7 @@ function save_record(mysqli $db, int $companyId, string $key, array $values, ?in
             $columns = implode('`, `',array_keys($values)); $marks = implode(',',array_fill(0,count($values),'?'));
             db_run($db,"INSERT INTO `$table` (`$columns`) VALUES ($marks)",array_values($values));
             $id = (int)$db->insert_id;
+            webhook_queue_record($db,$companyId,$key,$id,$webhookAction,$values);
             if ($key === 'jobs' && ($values['status'] ?? '') === 'published' && !empty($values['social_targets'] ?? '')) queue_social_sync($db,$companyId,$id,$values['social_targets']);
         }
         if (PHP_SAPI !== 'cli') audit_event($db,$companyId,'record.saved',$key,(string)$id);

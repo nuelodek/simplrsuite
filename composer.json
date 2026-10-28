@@ -1,5 +1,6 @@
 {
     "require": {
-        "sentry/sentry": "^4.9"
+        "sentry/sentry": "^4.9",
+        "phpmailer/phpmailer": "^6.9"
     }
 }
