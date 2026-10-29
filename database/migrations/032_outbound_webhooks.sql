@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS `webhook_destinations` (
   `last_delivery_status` VARCHAR(24) DEFAULT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `webhook_destinations_company` (`company_id`,`enabled`,`id`),
-  CONSTRAINT `webhook_destinations_company_fk` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE
+  KEY `webhook_destinations_company` (`company_id`,`enabled`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `webhook_destination_modules` (
@@ -20,8 +19,7 @@ CREATE TABLE IF NOT EXISTS `webhook_destination_modules` (
   `module_key` VARCHAR(32) NOT NULL,
   PRIMARY KEY (`destination_id`,`module_key`),
   KEY `webhook_destination_modules_company` (`company_id`,`module_key`),
-  CONSTRAINT `webhook_destination_modules_destination_fk` FOREIGN KEY (`destination_id`) REFERENCES `webhook_destinations` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `webhook_destination_modules_company_fk` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE
+  CONSTRAINT `webhook_destination_modules_destination_fk` FOREIGN KEY (`destination_id`) REFERENCES `webhook_destinations` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `webhook_outbox` (
@@ -42,6 +40,5 @@ CREATE TABLE IF NOT EXISTS `webhook_outbox` (
   UNIQUE KEY `webhook_outbox_event` (`event_id`),
   KEY `webhook_outbox_ready` (`state`,`next_attempt_at`,`id`),
   KEY `webhook_outbox_destination` (`company_id`,`destination_id`,`state`),
-  CONSTRAINT `webhook_outbox_destination_fk` FOREIGN KEY (`destination_id`) REFERENCES `webhook_destinations` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `webhook_outbox_company_fk` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE
+  CONSTRAINT `webhook_outbox_destination_fk` FOREIGN KEY (`destination_id`) REFERENCES `webhook_destinations` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

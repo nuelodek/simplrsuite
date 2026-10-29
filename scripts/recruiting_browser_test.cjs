@@ -2,7 +2,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'..'),base='http://127.0.0.1:8000',checks=[];
+const root=path.resolve(__dirname,'..'),base=(process.env.SIMPLR_TEST_BASE_URL||'http://127.0.0.1:8000').replace(/\/+$/,''),checks=[];
 const fixture=JSON.parse(fs.readFileSync(path.join(root,'.local/browser-fixture.json')));
 const recruit=JSON.parse(fs.readFileSync(path.join(root,'.local/recruiting-browser-fixture.json')));
 const config=fs.readFileSync(path.join(root,'.env'),'utf8');assert.match(config,/^APP_ENV=local$/m);assert.match(config,/^MAIL_TRANSPORT=log$/m);

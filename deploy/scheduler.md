@@ -57,7 +57,7 @@ everything is healthy (both checks) and prints the failing jobs otherwise, so th
 the alert. Rotate the two log files with logrotate (weekly, keep eight weeks is a
 reasonable start).
 
-**Plesk:** in *Websites & Domains → Scheduled Tasks*, add three tasks of type *Run a
+**Plesk:** in *Websites & Domains → Scheduled Tasks*, add four tasks of type *Run a
 PHP script* with the same scripts, arguments and schedules, running as the
 subscription's system user. Turn on Plesk's notification for failed tasks on the
 health-check task.
@@ -93,7 +93,7 @@ job. They show on the repository in the GitHub page and in the run's `failed` co
 
 ## Verify on staging (owner approval needed)
 
-1. Install the three cron lines on staging with SMTP pointed at an approved test
+1. Install all four scheduled tasks on staging with SMTP pointed at an approved test
    mailbox and GitHub connected to a test account.
 2. After five minutes `php scripts/scheduler_status.php` shows both jobs `OK`.
 3. Comment out the notifications line. Within 15 minutes the health check exits 1

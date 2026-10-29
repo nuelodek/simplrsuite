@@ -320,3 +320,84 @@ Also editing (findings): `users/help.php` (one e() wrap), `app/notifications.php
 (`notification_deliver` claims a message before sending; flush retries stale claims),
 new migration `032_notification_send_claim.sql`, `deploy/scheduler.md` and README
 (ops_check cron line).
+
+## Copilot — QuickBooks Online connection, 28 Oct 2026
+
+Status: **connector implemented; local credential values are present, but their
+validity and callback registration have not been verified by a real sandbox
+OAuth sign-in.**
+
+| Requirement | What I did |
+| --- | --- |
+| Make QuickBooks connectable from Integrations | Added Intuit OAuth start/callback, session-bound state, company ID validation, read-only Company Info verification, encrypted access/refresh tokens, refresh-token rotation, admin verify/disconnect controls, and provider token revocation with a visible fallback when revocation cannot be confirmed. |
+
+Files: `app/quickbooks.php`, `users/admin/quickbooks.php`,
+`users/admin/integrations.php`, `app/routes.php`, `scripts/quickbooks_test.php`,
+`docs/quickbooks-integration.md`, and local `.env` placeholders only.
+
+The connector does not sync or modify accounting records yet. No provider
+traffic was used; the connector test uses CLI-only synthetic transport
+responses. It passed 29/29 focused checks and PHP lint. Earlier output audit and
+local preflight results are historical; see the handoff above for current
+validation.
+
+## Copilot - Xero connection, 28 Oct 2026
+
+Status: **connector implemented; awaiting owner-provided Xero app credentials and
+registered callback before a real organization authorization can be verified.**
+
+| Requirement | What I did |
+| --- | --- |
+| Make Xero connectable from Integrations | Added OAuth start/callback, session-bound state, organization discovery and selection, read-only verification, encrypted rotating tokens, admin verify/disconnect controls, and provider token revocation. |
+
+Files: `app/xero.php`, `users/admin/xero.php`,
+`users/admin/integrations.php`, `app/routes.php`, `scripts/xero_test.php`, and
+`docs/xero-integration.md`.
+
+The connector does not synchronize accounting records. No real Xero credentials
+or provider traffic were used; the CLI-only synthetic test passed 29/29 checks,
+PHP lint passed, and `git diff --check` passed. The broader local smoke and
+browser suites did not complete successfully in this run; details are recorded
+in `work/overnight-handoff.md`.
+
+## Copilot — readiness tracker reconciliation, 29 Oct 2026
+
+Status: **completed and released 29 Oct 2026; no active file claims remain.**
+
+| Requirement | What I am doing |
+| --- | --- |
+| Reconcile local and production-configuration preflight evidence | `php scripts/preflight.php` passed 15/15; `php scripts/preflight.php --production` passed 25/27 on this workstation. The missing gates are live Paystack and Flutterwave configuration; host delivery is not established. Validated 34 unique tracker items/160 points and fixed its stale static denominator. |
+| Reconcile email and verification progress | Updated the email-delivery and talent tracker notes, preserved in-progress status, recorded 13 mail configuration checks, and left real delivery/staff invitation acceptance unverified. |
+
+Files: `requirements.html`, `work/overnight-handoff.md`, and this coordination
+record only. No application code, `.env`, provider endpoints, production host,
+scheduled jobs, real mail, or financial transactions are in scope.
+
+## Copilot — in-progress readiness items, 29 Oct 2026
+
+Status: **finished and released 29 Oct 2026.** Evidence and blockers are in
+`work/overnight-handoff.md` under “In-progress requirements continuation”.
+
+| Requirement | Outcome |
+| --- | --- |
+| All 17 requirements previously marked in progress | Revalidated with guarded local checks and updated evidence notes for route coverage, tenant isolation, idempotency, and container hardening. Completed the release/scheduler runbook corrections. No item was marked verified because full acceptance evidence remains incomplete. |
+
+This claim is released. No production application logic changed during final
+reconciliation; earlier in this continuation, test harnesses were extended with
+the isolated-base-URL override. Unrelated worktree changes were preserved.
+Testing used local synthetic data and log-only mail. No deployment, real email,
+external provider request, financial transaction, or paused automation occurred.
+
+## Copilot — input/output boundary verification, 29 Oct 2026
+
+Status: **finished and released 29 Oct 2026.**
+
+| Requirement | What I am doing |
+| --- | --- |
+| Review injection, XSS, CSRF, SSRF and upload boundaries | Re-ran output audit (206 targets, 71 reviewed, 0 open) and rich-text unit checks (15/15). Reviewed webhook URL restrictions, found PHP's IP-range flags accepted special-use addresses, and added explicit IPv4/IPv6 range rejection with `scripts/webhook_url_test.php` (31/31); broader route/CSRF/upload/legacy review remains open. |
+
+Files changed: `app/webhooks.php`, `scripts/webhook_url_test.php`,
+`requirements.html`, `work/overnight-handoff.md`, and this coordination record.
+This claim is released. Checks used an injected DNS resolver and made no
+external requests; no live exploit traffic, real email, payment activity,
+deployment, scheduler action, or `.env` change occurred.

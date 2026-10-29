@@ -21,6 +21,9 @@ $initialize = function($method,$path,$payload) use (&$calls) {
 };
 try {
     verify_check(paystack_ready(),'Test configuration is recognized');
+    putenv('PAYSTACK_TEST_SECRET_KEY=sk_test_modefixtureonly');
+    verify_check(paystack_secret_key()==='sk_test_modefixtureonly','Mode-specific test key is selected');
+    putenv('PAYSTACK_TEST_SECRET_KEY');
     $quote = billing_quote(['project'=>'2','recruiting'=>'1']);
     verify_check($quote['amount'] === 950000 && $quote['currency'] === 'NGN','Prices come from server in kobo');
     foreach ([[],['project'=>'-1'],['project'=>'13'],['project'=>'1.5'],['unknown'=>'1'],['project'=>[]]] as $selection) rejects(fn()=>billing_quote($selection),InvalidArgumentException::class,'Invalid cart rejected');
@@ -59,7 +62,7 @@ try {
     verify_check(!billing_module_active($db,(int)$user['company_id'],'projects'),'Test payment cannot enable live entitlements');
     putenv('PAYSTACK_MODE=test');
     $raw = '{"event":"charge.success","data":{"reference":"test"}}';
-    $signature = hash_hmac('sha512',$raw,config('PAYSTACK_SECRET_KEY'));
+    $signature = hash_hmac('sha512',$raw,paystack_secret_key());
     verify_check(paystack_valid_signature($raw,$signature),'Valid raw-body HMAC is accepted');
     verify_check(!paystack_valid_signature($raw . ' ',$signature),'Altered payload is rejected');
     verify_check(!paystack_valid_signature($raw,str_repeat('0',128)),'Forged signature is rejected');

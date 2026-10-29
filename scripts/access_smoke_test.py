@@ -9,12 +9,13 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError
 from http.cookiejar import CookieJar
 import json
+import os
 import re
 import subprocess
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE = 'http://127.0.0.1:8000'
+BASE = os.environ.get('SIMPLR_TEST_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
 checks = []
 local = (ROOT / '.env').read_text()
 assert re.search(r'^APP_ENV=local$',local,re.M) and re.search(r'^MAIL_TRANSPORT=log$',local,re.M)
@@ -150,7 +151,8 @@ if __name__ == '__main__':
         expect(admin.request('/users/admin/updatetask.php',{'taskId':task['id']})[0] == 419,'Legacy task update requires CSRF')
         expect(admin.request('/users/admin/updatetask.php',values)[0] == 200,'Legacy task update works for owner with version')
         blocked = ['/users/admin/revoketools.php','/users/admin/processtools.php','/users/admin/createbankaccount.php','/users/admin/createdollarcard.php','/users/admin/marquettawebhook.php','/toolkits/project_mgt/update.php','/toolkits/acct_payroll/recordpayment.php','/users/talents/update_inventory.php','/users/talents/unitbankdemo.php','/superadmin/gitpayloads.php','/users/employees/db.php','/users/admin/session.php','/scripts/smoke_test.py','/app/routes.php','/.env','/storage/mail/test.json','/work/overnight-handoff.md','/public-entry.php','/users/admin/login.php/extra','/users/admin/login.php%00','/%252eenv','/users%5cadmin%5cprocesstools.php']
-        for base in [BASE,'http://127.0.0.1:8001']:
+        bases = [BASE] if os.environ.get('SIMPLR_TEST_BASE_URL') else [BASE,'http://127.0.0.1:8001']
+        for base in bases:
             client = Client(base)
             expect(client.request('/health.php')[0] == 200,'Healthy server: '+base)
             for page in ['/','/landing/business/','/landing/talents/','/landing/work/','/users/admin/login.php','/public/styles/suite.css']:

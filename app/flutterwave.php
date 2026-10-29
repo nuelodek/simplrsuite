@@ -4,10 +4,12 @@ require_once __DIR__ . '/paystack.php';
 
 function flutterwave_ready(): bool {
     $mode = config('PAYSTACK_MODE','test'); // Both providers share one entitlement environment.
-    $key = config('FLUTTERWAVE_SECRET_KEY');
+    $configuredMode = config('FLUTTERWAVE_MODE',$mode);
+    $key = billing_provider_config('FLUTTERWAVE','SECRET_KEY');
     if (config('FLUTTERWAVE_ENABLED','false') !== 'true' || !in_array($mode,['test','live'],true)) return false;
+    if ($configuredMode !== $mode) return false;
     if (!preg_match($mode === 'test' ? '/^FLWSECK_TEST-[a-zA-Z0-9-]+$/D' : '/^FLWSECK-[a-zA-Z0-9-]+$/D',$key)) return false;
-    if (strlen(config('FLUTTERWAVE_WEBHOOK_HASH')) < 32) return false;
+    if (strlen(billing_provider_config('FLUTTERWAVE','WEBHOOK_HASH')) < 32) return false;
     if ($mode === 'live' && (config('APP_ENV') !== 'production' || !str_starts_with(config('APP_URL'),'https://'))) return false;
     try { billing_usd_rate(); } catch (InvalidArgumentException $error) { return false; }
     return extension_loaded('curl');
@@ -19,7 +21,7 @@ function flutterwave_api(string $method, string $path, array $data = [], ?callab
         $response = $transport($method,$path,$data);
     } else {
         $handle = secure_curl(curl_init('https://api.flutterwave.com/v3' . $path));
-        curl_setopt_array($handle,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_HTTPHEADER=>['Authorization: Bearer ' . config('FLUTTERWAVE_SECRET_KEY'),'Content-Type: application/json'],CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
+        curl_setopt_array($handle,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_HTTPHEADER=>['Authorization: Bearer ' . billing_provider_config('FLUTTERWAVE','SECRET_KEY'),'Content-Type: application/json'],CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
         if ($method === 'POST') curl_setopt($handle,CURLOPT_POSTFIELDS,json_encode($data,JSON_THROW_ON_ERROR));
         $raw = curl_exec($handle); $status = (int)curl_getinfo($handle,CURLINFO_RESPONSE_CODE); curl_close($handle);
         if (!is_string($raw) || $status < 200 || $status >= 300 || strlen($raw)>1048576) throw new PaymentUnavailable('Flutterwave could not confirm this request. Check its status before trying again.');
@@ -35,7 +37,7 @@ function flutterwave_checkout_url(mixed $url): bool {
 }
 function flutterwave_initialize(array $quote, string $reference, string $email, string $callback, ?callable $transport = null): mixed {
     $amount = intdiv($quote['amount'],100) . '.' . str_pad((string)($quote['amount']%100),2,'0',STR_PAD_LEFT);
-    $hash = hash('sha256',$amount . 'USD' . $email . $reference . hash('sha256',config('FLUTTERWAVE_SECRET_KEY')));
+    $hash = hash('sha256',$amount . 'USD' . $email . $reference . hash('sha256',billing_provider_config('FLUTTERWAVE','SECRET_KEY')));
     $data = flutterwave_api('POST','/payments',['tx_ref'=>$reference,'amount'=>$amount,'currency'=>'USD','redirect_url'=>$callback,'customer'=>['email'=>$email],'customizations'=>['title'=>'Simplr Suite','description'=>'Prepaid workspace toolkits'],'payload_hash'=>$hash],$transport);
     return $data['link'] ?? null;
 }
@@ -61,6 +63,6 @@ function flutterwave_verify_order(mysqli $db, array $order, ?callable $transport
     ]);
 }
 function flutterwave_valid_signature(string $signature): bool {
-    $secret = config('FLUTTERWAVE_WEBHOOK_HASH');
+    $secret = billing_provider_config('FLUTTERWAVE','WEBHOOK_HASH');
     return strlen($secret)>=32 && hash_equals($secret,$signature);
 }

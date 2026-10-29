@@ -9,12 +9,13 @@ from urllib.parse import urlencode, urlsplit
 from urllib.error import HTTPError
 from http.cookiejar import CookieJar
 import json
+import os
 import re
 import time
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE = 'http://127.0.0.1:8000'
+BASE = os.environ.get('SIMPLR_TEST_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
 local = (ROOT / '.env').read_text()
 if not re.search(r'^APP_ENV=local$', local, re.M) or not re.search(r'^MAIL_TRANSPORT=log$', local, re.M):
     sys.exit('Refusing to test without APP_ENV=local and MAIL_TRANSPORT=log in .env.')
@@ -59,9 +60,16 @@ def latest_mail(email, subject):
 
 
 def mail_path(email, subject):
-    link = re.search(r'http://127\.0\.0\.1:8000/\S+', latest_mail(email, subject)).group(0)
+    link = re.search(re.escape(BASE) + r'/\S+', latest_mail(email, subject)).group(0)
     parsed = urlsplit(link)
     return parsed.path + '?' + parsed.query
+
+
+def mail_code(email, subject):
+    match = re.search(r'(?<!\d)(\d{6})(?!\d)', latest_mail(email, subject))
+    if not match:
+        raise AssertionError('Expected six-digit verification code was not found')
+    return match.group(1)
 
 
 def signup(client, email, company):
@@ -72,9 +80,10 @@ def signup(client, email, company):
     token, _ = client.csrf('/users/admin/login.php')
     _, _, url = client.request('/users/admin/login_process.php', {'csrf_token': token, 'email': email, 'password': password})
     expect('/verifyaccount.php' in url, 'Unverified account cannot enter workspace')
-    path = mail_path(email, 'Verify your Simplr workspace')
+    path = '/users/admin/verifyaccount.php'
+    verification_code = mail_code(email, 'Verify your Simplr workspace')
     token, _ = client.csrf(path)
-    code, body, url = client.request(path, {'csrf_token': token})
+    code, body, url = client.request(path, {'csrf_token': token, 'verification_code': verification_code})
     expect(code == 200 and 'Email verified.' in body and '/login.php' in url, 'Email verification completes')
     token, _ = client.csrf('/users/admin/login.php')
     before = {cookie.name: cookie.value for cookie in client.cookies}.get('PHPSESSID')

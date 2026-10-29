@@ -1117,3 +1117,155 @@ readiness and provider activation.
   the conservative `in-progress` status and made the tracker note explicit:
   the new 149/149 and 35/35 recruiting checks and backup restore drill are
   additional evidence, not a full-suite rerun.
+
+## QuickBooks Online connection — 28 Oct 2026 (Copilot)
+
+- Added a connectable QuickBooks Online integration card and admin connection
+  page. Workspace admins can initiate Intuit OAuth, verify the selected company
+  via the read-only Company Info API, re-verify the connection, and disconnect.
+- Added session-bound ten-minute OAuth state, numeric realm/company ID checking,
+  exact callback URI display, minimum accounting scope, strict HTTPS host
+  allowlisting, encrypted access/refresh tokens, token refresh/rotation, and
+  Intuit token revocation on disconnect (with a visible manual-revocation
+  instruction if provider revocation is unavailable).
+- Set up the connector for server-provided `QUICKBOOKS_CLIENT_ID`,
+  `QUICKBOOKS_CLIENT_SECRET`, and `QUICKBOOKS_ENVIRONMENT`; non-placeholder
+  credential values are present in the ignored local `.env`. No real OAuth
+  exchange was run, so credential validity and callback registration remain
+  unverified. Use sandbox for local testing.
+- Accounting data import/export and ledger writes are explicitly out of scope
+  for this connection phase. No real QuickBooks credentials or provider traffic
+  were used.
+- `php scripts/quickbooks_test.php`: **29/29** synthetic checks passed. PHP lint
+  passed for all new/edited PHP files. `scripts/output_audit_test.php` reviewed
+  71 existing findings, with 0 open. `scripts/preflight.php` passed 14/15: its
+  only failure is an already-pending database migration unrelated to QuickBooks.
+
+## Xero organization connection - 28 Oct 2026 (Copilot)
+
+- Added Xero OAuth authorization and callback, session-bound state, discovery
+  and selection of the authorized organization, read-only Organisation API
+  verification, encrypted access/refresh tokens, refresh-token rotation, and
+  admin verify/disconnect controls with provider revocation.
+- Added the admin connection page and Integrations card. Removed Xero from the
+  future-integration catalog so its status reflects the implemented connector.
+- Configure server-side `XERO_CLIENT_ID` and `XERO_CLIENT_SECRET`, then register
+  the callback URL shown on the connection page. The current local environment
+  has not been configured with Xero credentials.
+- The connector requests only `accounting.settings.read` and `offline_access`.
+  It does not import, export, or modify accounting records. No real Xero
+  credentials or provider traffic were used.
+- `php scripts/xero_test.php`: **29/29** synthetic checks passed;
+  `php scripts/quickbooks_test.php`: **29/29** regression checks passed; PHP
+  lint and `git diff --check` passed.
+- The broader consolidation smoke run returned 42/43 checks, with a temporary
+  service error while creating a synthetic department. The browser run passed
+  its 24 assertions but timed out waiting for its workspace navigation. These
+  suites did not complete successfully and should be rerun separately.
+
+## Readiness tracker reconciliation — 29 Oct 2026 (Copilot)
+
+- Validated **34 unique checklist items totaling 160 points**; corrected the
+  initial score text, which still said 100 points. The browser script already
+  computes the denominator from the actual checklist items.
+- Python HTML parsing confirmed 34 unique item IDs and the 160-point total;
+  status counts are 17 in progress, 9 blocked, 5 pending, and 3 verified.
+  `git diff --check` passed for the tracker and handoff files.
+- Updated `requirements.html` to replace stale preflight figures with a fresh
+  read-only run: `php scripts/preflight.php` passed **15/15** local-runtime
+  checks; `php scripts/preflight.php --production` passed **25/27** production-
+  configuration checks on this workstation. The two failures are live Paystack
+  and Flutterwave configuration gates. Neither command contacted a provider or
+  verified an actual production host, DNS/HTTPS serving, SMTP delivery/inbox
+  placement, provider activation, backup operations, or legal compliance.
+- The SMTP preflight validates configuration shape only. `php
+  scripts/mail_config_test.php` passed **13** checks; `php
+  scripts/output_audit_test.php` reviewed **71** findings with **0** open.
+  Rich-text unit checks passed **15/15** and accounting unit checks passed
+  **21/21**.
+- `php scripts/recruiting_policy_test.php` exited **2 before tests** because its
+  safety guard requires `APP_ENV=local` and `MAIL_TRANSPORT=log`; no local-mode
+  override was applied. This is not recorded as a test failure or pass. No full
+  application suite was run in the current production-configured process.
+- Reconciled the checklist: `quality-local-preflight` reflects 15/15; the
+  production-configuration posture is 25/27; `email-delivery` is in progress,
+  not verified. The 6-digit business/talent verification-code implementation
+  is recorded under `identity-talent`; the previous PHP-lint and focused
+  code-hash evidence remains historical, and signup journeys were not rerun
+  during this refresh. No real mail was sent.
+- Kept provider, hosting, recipient-consent, legal, backup, and full-suite gates
+  open. No `.env` contents were displayed or changed; no deployment, scheduled
+  job, external email, provider call, or financial transaction was performed.
+
+## In-progress requirements continuation — 29 Oct 2026 (Copilot)
+
+- Used a dedicated router-backed local PHP server for HTTP journeys, with
+  `APP_ENV=local`, `MAIL_TRANSPORT=log`, `DB_DATABASE=simplr_dev`, and
+  `BILLING_ENFORCE=false` in the test process. Tests used
+  `SIMPLR_TEST_BASE_URL`; the unsafe document-root-only PHP server was not used
+  for app journeys. Any temporary `.env` adjustment needed by guarded smoke
+  scripts was restored; its values are not reproduced here.
+- Earlier in this continuation, added `SIMPLR_TEST_BASE_URL` support to the
+  smoke and browser harnesses so they can target that isolated server without
+  touching the pre-existing service on port 8000.
+- Successful local evidence: consolidation smoke **394/394** (core **197/197**,
+  talent **268/268**); consolidation browser **55/55**; access smoke **183/183**;
+  idempotency **31/31**; route audit **1004/1004 across 167 routes**; session
+  hardening **23/23**; mail configuration **13**; rich-text **15/15**;
+  accounting **21/21**; recruiting policy **14/14**; output audit **71 reviewed,
+  0 open**; Paystack adapter **57/57** and Flutterwave adapter **48/48** using
+  synthetic transports; QuickBooks **29/29**, Xero **29/29**, Workday **22/22**,
+  and Zoho Books **33/33** connector checks.
+- Re-runs needing fixture login were stopped when the app's natural 15-minute
+  rate limit blocked synthetic admin login: tenant-isolation and recruiting
+  journeys, plus the Paystack/Flutterwave HTTP mock suite (2/3 checks). No
+  rate-limit state was cleared, bypassed, or extended.
+- `role_transition_test.php` and `migration_failure_recovery_test.php` could
+  not create their disposable databases: the configured MySQL account lacks
+  `CREATE DATABASE` permission. No alternate credentials or permission
+  changes were attempted. Docker is unavailable, so no image build was run.
+- Local operations checks reported both intentionally paused scheduler jobs as
+  never run, approximately 1 GB of free disk, no configured `BACKUP_DIR` or
+  readable PHP error-log path, and 13 recent synthetic payment mismatch events
+  in the local development database. These are local readiness alerts, not
+  production incident evidence; no jobs were started and no data/logs were
+  cleared.
+- Corrected `deploy/scheduler.md` to describe four scheduled tasks and updated
+  `deploy/release.md` to remove stale preflight counts, document the isolated
+  router-backed test base, and pause the two worker jobs rather than all four
+  tasks. The 29 Oct workstation `--production` preflight is **25/27**; that does
+  not establish production-host, live-provider, or actual email delivery.
+- Updated the route, tenant, idempotency and hardening evidence notes in
+  `requirements.html`. No status was advanced to **Verified**: full definitions
+  of done remain open for the 17 items, including incomplete legacy-route and
+  cross-tenant coverage, dependency-scan CI confirmation, role/migration
+  reruns, invitation relay/inbox verification, staging/host validation, owner
+  backup and on-call decisions, and the complete regression/accessibility
+  suites. Keep the existing statuses until those specific gates are met.
+- No deployment, real email, external provider request, financial transaction,
+  scheduler activation, secret rotation, or database privilege change occurred.
+
+## Input/output boundary continuation — 29 Oct 2026 (Copilot)
+
+- Reran database-independent checks: `php scripts/output_audit_test.php`
+  reported **206 targets, 71 reviewed findings, 0 open**; rich-text sanitizer
+  passed **15/15**; accounting unit checks passed **21/21**.
+- Reviewed the company-configured webhook URL validator. It already rejects
+  non-HTTPS/credentialed URLs and private DNS answers, disables redirects, and
+  pins the resolved addresses for the HTTPS request. The regression test
+  exposed an important gap: on this PHP build, `FILTER_FLAG_NO_RES_RANGE`
+  accepts several special-use ranges, including shared-address, benchmarking,
+  documentation and multicast IPv4, plus IPv6 translation/transition ranges.
+- Added `webhook_ip_is_public()` in `app/webhooks.php` to additionally reject
+  explicit non-public IPv4/IPv6 CIDRs before accepted answers are pinned.
+  Added `scripts/webhook_url_test.php` with an injected resolver to cover URL
+  scheme/userinfo/fragment/port restrictions, DNS failures, mixed public/private
+  answers, and reserved/private address classes. It makes no DNS or network
+  requests. Result: **31/31**; PHP lint passed for both files and scoped
+  `git diff --check` passed.
+- This closes a specific webhook SSRF validation gap, not the broader input /
+  output requirement. Direct route, legacy sink, CSRF, all upload paths and
+  cross-tenant authorization still need complete coverage; tracker status stays
+  **in progress**.
+- No external host was contacted, no exploit traffic was sent, and no mail,
+  provider request, payment, deployment or scheduler action occurred.

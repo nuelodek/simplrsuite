@@ -30,7 +30,7 @@ if (!isset($userId)) fail('We could not create the workspace. Please try again.'
 session_regenerate_id(true);
 $_SESSION['verification_user_id'] = $userId;
 unset($_SESSION['signup_old']);
-$token = issue_token($db, $userId, 'verify');
-$sent = send_account_mail($email, 'Verify your Simplr workspace', "Welcome to Simplr Suite.\n\nVerify your email using this link within one hour:\n" . account_link('/users/admin/verifyaccount.php', $token) . "\n\nIf you did not create this workspace, you can ignore this email.");
-flash($sent ? 'Your workspace has been created. Check your email for the verification link.' : 'Your workspace has been created, but we could not send the email. Use Resend below to try again.', $sent ? 'success' : 'error');
+$code = issue_verification_code($db, $userId);
+$sent = send_account_mail($email, 'Verify your Simplr workspace', "Welcome to Simplr Suite.\n\nEnter this six-digit verification code in Simplr Suite within 10 minutes:\n\n" . $code . "\n\nIf you did not create this workspace, you can ignore this email.");
+flash($sent ? 'Your workspace has been created. Enter the six-digit code sent to your email.' : 'Your workspace has been created, but we could not send the code. Use Resend below to try again.', $sent ? 'success' : 'error');
 redirect('/users/admin/verifyaccount.php');

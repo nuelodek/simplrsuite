@@ -3,8 +3,22 @@ declare(strict_types=1);
 require_once __DIR__ . '/bootstrap.php';
 
 function mail_ready(): bool {
-    if (config('APP_ENV') === 'local' && config('MAIL_TRANSPORT') === 'log') return true;
-    return config('MAIL_TRANSPORT', 'smtp') === 'smtp' && config('SMTP_HOST') !== '' && filter_var(config('MAIL_FROM_ADDRESS'), FILTER_VALIDATE_EMAIL) && filter_var(config('APP_URL'), FILTER_VALIDATE_URL) && !str_contains(config('APP_URL'), '.example');
+    $transport = config('MAIL_TRANSPORT','smtp');
+    if ($transport === 'log') return config('APP_ENV') === 'local';
+    if ($transport !== 'smtp') return false;
+    $port = filter_var(config('SMTP_PORT','587'),FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>65535]]);
+    $host = config('SMTP_HOST');
+    $validHost = filter_var($host,FILTER_VALIDATE_IP)
+        || (bool)filter_var($host,FILTER_VALIDATE_DOMAIN,FILTER_FLAG_HOSTNAME);
+    $appUrl = config('APP_URL');
+    return $validHost
+        && $port !== false
+        && config('SMTP_USERNAME') !== ''
+        && config('SMTP_PASSWORD') !== ''
+        && in_array(config('SMTP_ENCRYPTION','tls'),['tls','ssl'],true)
+        && (bool)filter_var(config('MAIL_FROM_ADDRESS'),FILTER_VALIDATE_EMAIL)
+        && (bool)filter_var($appUrl,FILTER_VALIDATE_URL)
+        && !str_contains($appUrl,'.example');
 }
 function safe_mail_error(string $message, string $recipient): string {
     foreach ([$recipient,config('SMTP_USERNAME'),config('SMTP_PASSWORD'),config('MAIL_FROM_ADDRESS')] as $sensitive) {

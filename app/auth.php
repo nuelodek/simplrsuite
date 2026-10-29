@@ -30,6 +30,20 @@ function issue_token(mysqli $db, int $userId, string $purpose): string {
     db_run($db, 'INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at) VALUES (?, ?, ?, UTC_TIMESTAMP() + INTERVAL 1 HOUR)', [$userId, $purpose, hash('sha256', $token)]);
     return $token;
 }
+function issue_verification_code(mysqli $db, int $userId): string {
+    db_run($db, "UPDATE auth_tokens SET used_at = UTC_TIMESTAMP() WHERE user_id = ? AND purpose = 'verify' AND used_at IS NULL", [$userId]);
+    for ($attempt = 0; $attempt < 10; $attempt++) {
+        $code = str_pad((string)random_int(0,999999),6,'0',STR_PAD_LEFT);
+        $hash = verification_code_hash($userId,$code);
+        if (db_one($db,'SELECT id FROM auth_tokens WHERE token_hash = ?',[$hash])) continue;
+        db_run($db, "INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at) VALUES (?, 'verify', ?, UTC_TIMESTAMP() + INTERVAL 10 MINUTE)", [$userId,$hash]);
+        return $code;
+    }
+    throw new RuntimeException('Could not generate a unique verification code.');
+}
+function verification_code_hash(int $userId, string $code): string {
+    return hash('sha256','verify|' . $userId . '|' . $code);
+}
 function password_error(string $password, string $confirmation): ?string {
     if (strlen($password) < 12 || strlen($password) > 72) return 'Use a password between 12 and 72 characters.';
     if ($password !== $confirmation) return 'The passwords do not match.';

@@ -53,10 +53,17 @@ storage. Rotate previously committed credentials. Use newly issued provider keys
 
 - `PAYSTACK_MODE=test` selects the shared test entitlement environment for both
   providers. Use `live` only after provider sandbox checks and account activation.
-- `PAYSTACK_ENABLED=true`, `PAYSTACK_SECRET_KEY`: Paystack key matching that mode.
-- `FLUTTERWAVE_ENABLED=true`, `FLUTTERWAVE_SECRET_KEY`: Flutterwave **v3** secret
-  key matching the same mode. `FLUTTERWAVE_WEBHOOK_HASH` must be a random secret
-  of at least 32 characters, also set in the Flutterwave dashboard.
+- `PAYSTACK_ENABLED=true` and `FLUTTERWAVE_ENABLED=true`.
+- Provider keys can use mode-specific names such as `PAYSTACK_TEST_SECRET_KEY`,
+  `PAYSTACK_LIVE_SECRET_KEY`, `FLUTTERWAVE_TEST_SECRET_KEY`, and
+  `FLUTTERWAVE_LIVE_SECRET_KEY`. The selected key follows `PAYSTACK_MODE`.
+  Existing unsuffixed `PAYSTACK_SECRET_KEY` and `FLUTTERWAVE_SECRET_KEY` settings
+  remain supported as fallbacks. If set, `FLUTTERWAVE_MODE` must match
+  `PAYSTACK_MODE` because both providers share an entitlement environment.
+- Set the matching `FLUTTERWAVE_TEST_WEBHOOK_HASH` or
+  `FLUTTERWAVE_LIVE_WEBHOOK_HASH` to a random secret of at least 32 characters
+  and configure the same value in the Flutterwave dashboard. The legacy
+  `FLUTTERWAVE_WEBHOOK_HASH` name remains supported as a fallback.
 - Review `BILLING_USD_RATE=0.00063` as a pricing decision. Confirm the Flutterwave
   business account supports USD collections and the intended settlement arrangement.
 - `APP_ENV=production`, `APP_URL` and audience origins must be real HTTPS origins.

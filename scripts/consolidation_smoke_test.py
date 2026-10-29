@@ -22,8 +22,15 @@ def request_reset(client, role, email, company):
     return client.request('/users/send_reset_email.php', {'csrf_token':csrf,'role':role,'email':email,'workspace':company}, True)
 
 def invite(client, role, staff_id, email):
-    csrf, _ = client.csrf('/users/admin/workspace.php?module=employees')
+    module = 'employees' if role == 'employee' else 'managers'
+    list_path = '/users/admin/workspace.php?module=' + module
+    csrf, _ = client.csrf(list_path)
     expect(client.request('/users/admin/invite.php', {'csrf_token':csrf,'role':role,'staff_id':staff_id})[0] == 200, 'Consolidation fixture invitation succeeds')
+    code, body, _ = client.request(list_path)
+    expect(code == 200 and 'awaiting acceptance' in body and 'Resend' in body, 'Staff directory shows sent invitation awaiting acceptance with resend action')
+    previous_invitation = mail_path(email, 'Your Simplr workspace invitation')
+    expect(client.request('/users/admin/invite.php', {'csrf_token':csrf,'role':role,'staff_id':staff_id})[0] == 200, 'Consolidation fixture invitation can be resent')
+    expect(client.request(previous_invitation)[0] == 410, 'Resending invalidates the previous invitation link')
     invited = Client(); path = mail_path(email, 'Your Simplr workspace invitation')
     company = re.search(r'workspace code: (\d+)', latest_mail(email,'Your Simplr workspace invitation'), re.I).group(1)
     csrf, _ = invited.csrf(path)

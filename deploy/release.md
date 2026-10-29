@@ -27,7 +27,10 @@ staging server and the owner's go-ahead. Paths assume the app lives in
    `marketing_smoke_test.py`, `github_smoke_test.py` (with the stub, see its header),
    the `php scripts/*_unit_test.php` and payment simulation tests,
    `node scripts/consolidation_browser_test.cjs` and `recruiting_browser_test.cjs`.
-   `access_smoke_test.py` needs the Apache helper on port 8001.
+   The HTTP tests accept `SIMPLR_TEST_BASE_URL=http://127.0.0.1:<unused-port>`
+   when targeting an isolated local server. Start it with `router.php` (not the
+   repository root alone), and keep `APP_ENV=local`, `MAIL_TRANSPORT=log`, and
+   `DB_DATABASE=simplr_dev`.
 4. `php scripts/preflight.php` passes locally.
 5. List the migrations this release adds. For each, note whether it only adds
    tables or nullable/defaulted columns (safe for the previous code) or changes
@@ -38,8 +41,10 @@ staging server and the owner's go-ahead. Paths assume the app lives in
 1. Restore last night's production backup into the staging database, or use
    synthetic data. Never point staging at the production database.
 2. Deploy the tagged commit, then `php scripts/migrate.php`. Time it.
-3. `php scripts/preflight.php --production` shows no new failures
-   (15 of 27 locally on 27 Oct; the gaps are owner configuration, listed by the script).
+3. Run `php scripts/preflight.php --production` on staging and compare its
+   individual checks with the approved staging baseline. The workstation run
+   on 29 Oct passed 25/27; live Paystack and Flutterwave gates were the only
+   failures. That local result is not staging evidence.
 4. Smoke check by hand: owner sign-in, create and move a task, upload and download a
    file, open Alerts, staff sign-in, a public job page.
 5. `php scripts/scheduler_status.php` is healthy after five minutes of cron.
@@ -47,8 +52,9 @@ staging server and the owner's go-ahead. Paths assume the app lives in
 ## 3. Production window (host)
 
 1. Announce the window to customers if downtime is expected.
-2. Pause the scheduler: comment out the three cron lines from
-   `deploy/scheduler.md`. Wait for running jobs to finish
+2. Pause the two worker jobs by commenting out the notifications and GitHub-sync
+   lines from `deploy/scheduler.md`; keep health checks enabled and account for
+   the expected late-job alerts during the window. Wait for running jobs to finish
    (`php scripts/scheduler_status.php` shows no `running` job).
 3. Back up everything that must be restored together, to storage off this host:
    ```bash

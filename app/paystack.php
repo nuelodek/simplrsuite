@@ -19,10 +19,28 @@ function billing_checkout_url(string $provider, mixed $url): bool {
     return match($provider) { 'paystack'=>paystack_checkout_url($url), 'flutterwave'=>flutterwave_checkout_url($url), default=>false };
 }
 
+function billing_provider_config(string $provider, string $setting): string {
+    if (!in_array($provider,['PAYSTACK','FLUTTERWAVE'],true) || !in_array($setting,['SECRET_KEY','WEBHOOK_HASH'],true)) return '';
+    $mode = config('PAYSTACK_MODE','test');
+    if (!in_array($mode,['test','live'],true)) return '';
+    $modeKey = $provider . '_' . strtoupper($mode) . '_' . $setting;
+    $legacyKey = $provider . '_' . $setting;
+    $runtimeModeValue = getenv($modeKey);
+    if ($runtimeModeValue !== false) return $runtimeModeValue;
+    $runtimeLegacyValue = getenv($legacyKey);
+    if ($runtimeLegacyValue !== false) return $runtimeLegacyValue;
+    global $simplrConfig;
+    if (array_key_exists($modeKey,$simplrConfig)) return $simplrConfig[$modeKey];
+    return $simplrConfig[$legacyKey] ?? '';
+}
+
+function paystack_secret_key(): string {
+    return billing_provider_config('PAYSTACK','SECRET_KEY');
+}
 function paystack_ready(): bool {
     $mode = config('PAYSTACK_MODE','test');
     if (config('PAYSTACK_ENABLED','false') !== 'true' || !in_array($mode,['test','live'],true)) return false;
-    if (!preg_match('/^sk_' . $mode . '_[a-zA-Z0-9]+$/D',config('PAYSTACK_SECRET_KEY'))) return false;
+    if (!preg_match('/^sk_' . $mode . '_[a-zA-Z0-9]+$/D',paystack_secret_key())) return false;
     if ($mode === 'live' && (config('APP_ENV') !== 'production' || !str_starts_with(config('APP_URL'),'https://'))) return false;
     return extension_loaded('curl');
 }
@@ -33,7 +51,7 @@ function paystack_api(string $method, string $path, array $data = [], ?callable 
         $response = $transport($method,$path,$data);
     } else {
         $handle = secure_curl(curl_init('https://api.paystack.co' . $path));
-        curl_setopt_array($handle,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_HTTPHEADER=>['Authorization: Bearer ' . config('PAYSTACK_SECRET_KEY'),'Content-Type: application/json'],CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
+        curl_setopt_array($handle,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_HTTPHEADER=>['Authorization: Bearer ' . paystack_secret_key(),'Content-Type: application/json'],CURLOPT_CONNECTTIMEOUT=>4,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_PROTOCOLS=>CURLPROTO_HTTPS,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
         if ($method === 'POST') curl_setopt($handle,CURLOPT_POSTFIELDS,json_encode($data,JSON_THROW_ON_ERROR));
         $raw = curl_exec($handle); $status = (int)curl_getinfo($handle,CURLINFO_RESPONSE_CODE); curl_close($handle);
         if (!is_string($raw) || $status<200 || $status>=300 || strlen($raw)>1048576) throw new PaymentUnavailable('Paystack could not confirm this request. Check its status before trying again.');
@@ -135,6 +153,6 @@ function verify_billing_order(mysqli $db, array $order, ?callable $transport = n
     return fulfill_billing_order($db,$order,$verified);
 }
 function paystack_valid_signature(string $body, string $signature): bool {
-    $key = config('PAYSTACK_SECRET_KEY');
+    $key = paystack_secret_key();
     return $key !== '' && preg_match('/^[a-f0-9]{128}$/D',$signature) && hash_equals(hash_hmac('sha512',$body,$key),$signature);
 }

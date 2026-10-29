@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
 const root = path.resolve(__dirname, '..');
 const evidence = path.join(root, 'work/test-results');
+const base = (process.env.SIMPLR_TEST_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 const results = [];
 function check(value, name) { results.push({name, passed: !!value}); assert.ok(value, name); }
 async function localOnly(context) {
@@ -25,7 +26,7 @@ async function localOnly(context) {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => { window.originalNativeAlert = window.alert; });
-    await page.goto('http://127.0.0.1:8000/users/forgetpassword.php');
+    await page.goto(base + '/users/forgetpassword.php');
     check(await page.getByRole('link',{name:'Employee',exact:true}).count() === 1, 'Recovery account choices render');
     check(await page.evaluate(() => window.alert === window.originalNativeAlert), 'Toast component preserves native alert');
     await page.clock.install();
@@ -58,14 +59,14 @@ async function localOnly(context) {
     await page.evaluate(() => window.Toast.clear());
     const fixture = JSON.parse(fs.readFileSync(path.join(root,'.local/browser-fixture.json'),'utf8'));
     await page.setViewportSize({width:1280,height:900});
-    await page.goto('http://127.0.0.1:8000/users/admin/login.php');
+    await page.goto(base + '/users/admin/login.php');
     await page.locator('[name=email]').fill(fixture.email);
     await page.locator('[name=password]').fill(fixture.password);
     await page.getByRole('button',{name:/Sign in/}).click();
     await page.waitForURL('**/users/admin/newdashboard.php');
     check(await page.getByRole('heading',{name:'Business overview'}).isVisible(), 'Business dashboard still works after consolidation');
     check(await page.getByRole('link',{name:/Accounting/}).isVisible(), 'Business dashboard links to accounting');
-    await page.goto('http://127.0.0.1:8000/users/admin/accounting.php');
+    await page.goto(base + '/users/admin/accounting.php');
     check(await page.getByRole('heading',{name:'Accounting',exact:true}).isVisible(), 'Accounting page opens for the signed-in business owner');
     await page.getByRole('button',{name:'Create standard chart'}).click();
     // The fake clock installed for the toast checks stalls in-page polling until navigation settles.
@@ -96,13 +97,13 @@ async function localOnly(context) {
     check(await tour.getByRole('button',{name:'Finish tour'}).isVisible(), 'Business tour reaches its final step');
     await tour.getByRole('button',{name:'Finish tour'}).click();
     check(!await tour.isVisible(), 'Business tour closes when finished');
-    await page.goto('http://127.0.0.1:8000/users/admin/workspace.php?module=projects&action=edit&id=' + fixture.project_id);
+    await page.goto(base + '/users/admin/workspace.php?module=projects&action=edit&id=' + fixture.project_id);
     await page.locator('[name=projectName]').fill('Workspace launch');
     await page.getByRole('button',{name:/Save/}).click();
     await page.waitForURL('**/workspace.php?module=projects');
     check(await page.locator('.toast-message').innerText().then(t => t.includes('Project updated.')), 'Saved record displays consolidated success notification');
     check(await page.locator('[data-flash-type=success]').isHidden(), 'Enhanced success notice is not displayed twice');
-    await page.goto('http://127.0.0.1:8000/users/admin/newdashboard.php');
+    await page.goto(base + '/users/admin/newdashboard.php');
     await page.screenshot({path:path.join(evidence,'dashboard-consolidated-desktop.png'),fullPage:true});
     await page.setViewportSize({width:390,height:844});
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Dashboard fits mobile viewport');
@@ -111,11 +112,11 @@ async function localOnly(context) {
     await page.keyboard.press('Escape');
     check(await page.getByRole('button',{name:'Open navigation'}).evaluate(el => el === document.activeElement), 'Mobile navigation restores focus on Escape');
     await page.screenshot({path:path.join(evidence,'dashboard-consolidated-mobile.png'),fullPage:true});
-    await page.goto('http://127.0.0.1:8000/users/developers/documentation.php');
+    await page.goto(base + '/users/developers/documentation.php');
     check(await page.getByRole('heading',{name:'Workspace API guide'}).isVisible(), 'Consolidated API guide opens');
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'API guide fits mobile viewport');
     const staff = JSON.parse(fs.readFileSync(path.join(root,'.local/recovery-browser-fixture.json'),'utf8'));
-    await page.goto('http://127.0.0.1:8000/users/employees/login.php');
+    await page.goto(base + '/users/employees/login.php');
     await page.locator('[name=email]').fill(staff.email);
     await page.locator('[name=password]').fill(staff.password);
     await page.locator('[name=workspace]').fill(staff.workspace);
@@ -131,7 +132,7 @@ async function localOnly(context) {
     await staffTour.getByRole('button',{name:'Close dashboard tour'}).click();
     for (const audience of ['business','talents','work']) {
       await page.setViewportSize({width:1280,height:900});
-      await page.goto('http://127.0.0.1:8000/landing/' + audience + '/');
+      await page.goto(base + '/landing/' + audience + '/');
       check(await page.locator('h1').count() === 1, audience + ' landing has one main heading');
       check(await page.locator('.audience-nav [aria-current=page]').count() === 1, audience + ' landing identifies current audience');
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), audience + ' landing fits desktop viewport');
@@ -146,7 +147,7 @@ async function localOnly(context) {
     const nojs = await browser.newContext({javaScriptEnabled:false,viewport:{width:390,height:844}});
     await localOnly(nojs);
     const fallback = await nojs.newPage();
-    await fallback.goto('http://127.0.0.1:8000/users/forgetpassword.php?role=employee');
+    await fallback.goto(base + '/users/forgetpassword.php?role=employee');
     await fallback.locator('[name=email]').fill('browser-recovery-' + Date.now() + '@example.test');
     await fallback.locator('[name=workspace]').fill('1');
     await fallback.getByRole('button',{name:'Send reset link'}).click();

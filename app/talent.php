@@ -19,10 +19,19 @@ function talent_token(mysqli $db, int $id, string $purpose): string {
     return $token;
 }
 function talent_mail(mysqli $db, array $user, string $purpose): bool {
+    if ($purpose === 'verify') {
+        db_run($db, "UPDATE talent_tokens SET used_at = UTC_TIMESTAMP() WHERE account_id = ? AND purpose = 'verify' AND used_at IS NULL", [(int)$user['id']]);
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $code = str_pad((string)random_int(0,999999),6,'0',STR_PAD_LEFT);
+            $hash = verification_code_hash((int)$user['id'],$code);
+            if (db_one($db,'SELECT id FROM talent_tokens WHERE token_hash = ?',[$hash])) continue;
+            db_run($db, "INSERT INTO talent_tokens (account_id, purpose, token_hash, expires_at) VALUES (?, 'verify', ?, UTC_TIMESTAMP() + INTERVAL 10 MINUTE)", [(int)$user['id'],$hash]);
+            return send_account_mail($user['email'], 'Verify your Simplr talent account', "Enter this six-digit verification code in Simplr Suite within 10 minutes:\n\n" . $code);
+        }
+        throw new RuntimeException('Could not generate a unique talent verification code.');
+    }
     $token = talent_token($db, (int)$user['id'], $purpose);
-    $path = $purpose === 'verify' ? '/users/talents/verifyaccount.php' : '/users/talents/newpassword.php';
-    $subject = $purpose === 'verify' ? 'Verify your Simplr talent account' : 'Reset your Simplr talent password';
-    return send_account_mail($user['email'], $subject, "Use this link within one hour:\n" . account_link($path, $token));
+    return send_account_mail($user['email'], 'Reset your Simplr talent password', "Use this link within one hour:\n" . account_link('/users/talents/newpassword.php', $token));
 }
 function talent_password_field(string $name, string $label, bool $new = true): void {
     echo '<div class="field"><label for="' . e($name) . '">' . e($label) . '</label><input id="' . e($name) . '" name="' . e($name) . '" type="password" ' . ($new ? 'minlength="12" maxlength="72" autocomplete="new-password"' : 'autocomplete="current-password"') . ' required></div>';

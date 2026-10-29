@@ -550,6 +550,24 @@ time.overdue { color: #a33f31; font-weight: 600; }
 .integration-feature-title { display: flex; align-items: center; gap: 10px; }
 .integration-feature h2 { margin: 0; font-size: 18px; }
 .integration-feature p { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; }
+.connected-integration-section { margin: 30px 0; }
+.connected-integration-section > .section-heading { margin-bottom: 16px; }
+.connected-integration-section > .section-heading h2 { margin: 0 0 5px; }
+.connected-integration-section > .section-heading p { max-width: 760px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.integration-grid.connected-integration-grid { grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; gap: 20px; }
+.connected-integration-grid > .integration-card { display: flex; min-width: 0; height: 100%; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px; }
+.connected-integration-grid .provider-logo-mark { width: auto; min-width: 88px; height: 36px; margin: 0; padding: 0 12px; }
+.connected-integration-grid .integration-card h2,
+.connected-integration-grid .integration-card p,
+.connected-integration-grid .integration-card small { margin: 0; }
+.connected-integration-grid .integration-card h2 { line-height: 1.35; }
+.connected-integration-grid .integration-card p { line-height: 1.65; }
+.connected-integration-grid .integration-card .badge { margin: 0; }
+.connected-integration-grid .integration-card small { line-height: 1.55; }
+.provider-logo-mark.workday { color: #0875c9; }
+.provider-logo-mark.zoho-books { color: #b51f24; }
+@media (max-width: 980px) { .integration-grid.connected-integration-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 640px) { .integration-grid.connected-integration-grid { grid-template-columns: 1fr; gap: 14px; } .connected-integration-grid > .integration-card { padding: 20px; } }
 .catalog-search { display: flex; align-items: center; gap: 14px; margin: 6px 0 16px; }
 .catalog-search .search-field { flex: 1; max-width: 520px; }
 .catalog-empty { margin: 0 0 16px; }
@@ -825,3 +843,4 @@ time.overdue { color: #a33f31; font-weight: 600; }
 .auth-story > .brand .brand-suffix { color: #bfd0c4; }
 .preview-row > span:last-child { color: #536846; }
 .preview-caption { color: #536448; }
+.text-button-link { appearance: none; padding: 0; border: 0; background: transparent; font: inherit; }

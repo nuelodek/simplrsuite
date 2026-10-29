@@ -1,5 +1,5 @@
 """Local-only talent journey checks. Runs core checks first using their fixtures."""
-from smoke_test import Client, ROOT, expect, mail_path, checks, run
+from smoke_test import BASE, Client, ROOT, expect, mail_code, mail_path, checks, run
 import json
 import re
 from urllib.parse import quote
@@ -28,12 +28,14 @@ try:
     code, body, url = talent.request('/users/talents/congrats.php', {'csrf_token':csrf,'full_name':name,'industry':'Design','email':email,'password':password,'confirm_password':password,'status':'Verified','talent_id':'1'})
     expect(code == 200 and '/verifyaccount.php' in url, 'Talent signup ignores client verification status')
     expect('/verifyaccount.php' in login(talent,email,password)[2], 'Unverified talent cannot enter profile')
-    path = mail_path(email,'Verify your Simplr talent account')
+    path = '/users/talents/verifyaccount.php'
+    verification_code = mail_code(email,'Verify your Simplr talent account')
     csrf, _ = talent.csrf(path)
-    code, body, url = talent.request(path, {'csrf_token':csrf})
-    expect(code == 200 and 'Email verified.' in body, 'Talent verifies using emailed token')
+    code, body, url = talent.request(path, {'csrf_token':csrf,'verification_code':verification_code,'action':'verify'})
+    expect(code == 200 and 'Email verified.' in body, 'Talent verifies using six-digit email code')
     csrf, _ = talent.csrf(path)
-    expect(talent.request(path, {'csrf_token':csrf})[0] == 422, 'Talent verification token is single use')
+    replay_code, replay_body, replay_url = talent.request(path, {'csrf_token':csrf,'verification_code':verification_code,'action':'verify'})
+    expect(replay_code == 200 and '/talentlogin.php' in replay_url and 'Email verified.' not in replay_body, 'Talent verification code cannot be reused')
     before = {c.name:c.value for c in talent.cookies}.get('PHPSESSID')
     code, body, url = login(talent,email,password)
     after = {c.name:c.value for c in talent.cookies}.get('PHPSESSID')
@@ -53,7 +55,7 @@ try:
     boundary = 'SimplrSyntheticUploadBoundary'
     payload = ''.join('--' + boundary + '\r\nContent-Disposition: form-data; name="' + key + '"\r\n\r\n' + value + '\r\n' for key, value in {**form, **values}.items())
     payload += '--' + boundary + '\r\nContent-Disposition: form-data; name="resume"; filename="synthetic.txt"\r\nContent-Type: text/plain\r\n\r\nSynthetic test attachment\r\n--' + boundary + '--\r\n'
-    upload = Request('http://127.0.0.1:8000/users/talents/submit_talent.php', data=payload.encode(), headers={'Content-Type':'multipart/form-data; boundary=' + boundary})
+    upload = Request(BASE + '/users/talents/submit_talent.php', data=payload.encode(), headers={'Content-Type':'multipart/form-data; boundary=' + boundary})
     try:
         response = talent.opener.open(upload, timeout=30)
     except HTTPError as error:
@@ -75,9 +77,9 @@ try:
     other_email = 'talent-other-' + run + '@example.test'
     csrf, _ = other.csrf('/users/talents/talentsignup.php')
     other.request('/users/talents/talentsignup.php',{'csrf_token':csrf,'full_name':'Other Talent','industry':'Design','email':other_email,'password':password,'confirm_password':password})
-    path2 = mail_path(other_email,'Verify your Simplr talent account')
+    path2 = '/users/talents/verifyaccount.php'
     csrf, _ = other.csrf(path2)
-    other.request(path2,{'csrf_token':csrf})
+    other.request(path2,{'csrf_token':csrf,'verification_code':mail_code(other_email,'Verify your Simplr talent account'),'action':'verify'})
     login(other,other_email,password)
     form2 = profile_form(other)
     other.request('/users/talents/submit_talent.php',{**form2,**values,'headline':'Another account profile','account_id':'1','talent_id':'1'})

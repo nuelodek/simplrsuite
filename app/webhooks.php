@@ -23,12 +23,40 @@ function webhook_validate_url(string $url, ?callable $resolver = null): array {
     if (!is_array($addresses) || !$addresses) throw new RuntimeException('Webhook destination hostname did not resolve.');
     $public = [];
     foreach (array_unique($addresses) as $address) {
-        if (!is_string($address) || !filter_var($address,FILTER_VALIDATE_IP,FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        if (!is_string($address) || !webhook_ip_is_public($address)) {
             throw new InvalidArgumentException('Webhook destination resolves to a private or reserved network.');
         }
         $public[] = $address;
     }
     return ['url'=>$url,'host'=>$host,'port'=>443,'addresses'=>$public];
+}
+
+function webhook_ip_is_public(string $address): bool {
+    if (!filter_var($address,FILTER_VALIDATE_IP,FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) return false;
+    $nonPublicCidrs = [
+        '0.0.0.0/8','10.0.0.0/8','100.64.0.0/10','127.0.0.0/8','169.254.0.0/16',
+        '172.16.0.0/12','192.0.0.0/24','192.0.2.0/24','192.88.99.0/24',
+        '192.168.0.0/16','198.18.0.0/15','198.51.100.0/24','203.0.113.0/24',
+        '224.0.0.0/4','240.0.0.0/4',
+        '::/96','::ffff:0:0/96','64:ff9b::/96','64:ff9b:1::/48','100::/64',
+        '2001::/23','2001:db8::/32','2001:10::/28','2001:20::/28',
+        '2002::/16','3fff::/20','fc00::/7','fe80::/10','fec0::/10','ff00::/8',
+    ];
+    $packedAddress = inet_pton($address);
+    if ($packedAddress === false) return false;
+    foreach ($nonPublicCidrs as $cidr) {
+        [$network,$prefix] = explode('/',$cidr,2);
+        $packedNetwork = inet_pton($network);
+        if ($packedNetwork === false || strlen($packedNetwork) !== strlen($packedAddress)) continue;
+        $prefix = (int)$prefix;
+        $wholeBytes = intdiv($prefix,8);
+        $remainingBits = $prefix % 8;
+        if (substr($packedAddress,0,$wholeBytes) !== substr($packedNetwork,0,$wholeBytes)) continue;
+        if ($remainingBits === 0) return false;
+        $mask = (0xff << (8 - $remainingBits)) & 0xff;
+        if ((ord($packedAddress[$wholeBytes]) & $mask) === (ord($packedNetwork[$wholeBytes]) & $mask)) return false;
+    }
+    return true;
 }
 
 function webhook_dns_addresses(string $host): array {

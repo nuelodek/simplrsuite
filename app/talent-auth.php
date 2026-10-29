@@ -34,7 +34,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $id = (int)$db->insert_id;
             $_SESSION['talent_verification_id'] = $id;
             $sent = talent_mail($db, ['id'=>$id,'email'=>$email], 'verify');
-            flash($sent ? 'Check your inbox for your verification link.' : 'Your account was saved, but email delivery failed. You can resend below.', $sent ? 'success' : 'error');
+            flash($sent ? 'Enter the six-digit verification code sent to your email.' : 'Your account was saved, but the code could not be sent. You can resend below.', $sent ? 'success' : 'error');
             redirect('/users/talents/verifyaccount.php');
         }
     } elseif ($error === '' && $mode === 'login') {
@@ -61,30 +61,62 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             flash('If that email has a talent account, a reset link will arrive shortly.');
             redirect('/users/talents/resetpassword.php');
         }
-    } elseif ($mode === 'verify' || $mode === 'newpassword') {
-        $purpose = $mode === 'verify' ? 'verify' : 'reset';
-        if ($mode === 'verify' && $token === '') {
-            $user = db_one($db, "SELECT id, email FROM talentprofile WHERE id = ? AND status = 'Unverified'", [$_SESSION['talent_verification_id'] ?? 0]);
-            if (!$user) redirect('/users/talents/talentlogin.php');
+    } elseif ($mode === 'verify') {
+        if ($token !== '') {
+            if (!preg_match('/^[a-f0-9]{64}$/D',$token)) $error = 'This link is invalid. Request a new code.';
+            if ($error === '') {
+                $db->begin_transaction();
+                $record = db_one($db, "SELECT * FROM talent_tokens WHERE token_hash = ? AND purpose = 'verify' AND used_at IS NULL AND expires_at > UTC_TIMESTAMP() FOR UPDATE", [hash('sha256',$token)]);
+                if ($record) {
+                    db_run($db, "UPDATE talentprofile SET status = 'Verified' WHERE id = ? AND status = 'Unverified'", [$record['account_id']]);
+                    db_run($db, "UPDATE talent_tokens SET used_at = UTC_TIMESTAMP() WHERE account_id = ? AND purpose = 'verify' AND used_at IS NULL", [$record['account_id']]);
+                    $db->commit(); session_regenerate_id(true); $_SESSION = $pendingJob ? ['pending_job'=>$pendingJob] : [];
+                    flash('Email verified. Sign in to build your profile.');
+                    redirect('/users/talents/talentlogin.php');
+                }
+                $db->rollback();
+                $error = 'This link has expired or has already been used. Request a new code.';
+            }
+        }
+        $user = db_one($db, "SELECT id, email FROM talentprofile WHERE id = ? AND status = 'Unverified'", [$_SESSION['talent_verification_id'] ?? 0]);
+        if (!$user) redirect('/users/talents/talentlogin.php');
+        if (input('action') === 'resend') {
             rate_limit($db, 'talent-resend', (string)$user['id'], 3);
             $sent = mail_ready() && talent_mail($db, $user, 'verify');
-            flash($sent ? 'A new verification link is on its way.' : 'Email delivery is unavailable. Please try again later.', $sent ? 'success' : 'error');
+            flash($sent ? 'A new verification code is on its way.' : 'Email delivery is unavailable. Please try again later.', $sent ? 'success' : 'error');
             redirect('/users/talents/verifyaccount.php');
         }
-        if (!preg_match('/^[a-f0-9]{64}$/D', $token)) $error = 'This link is invalid. Request a new one.';
+        $code = input('verification_code');
+        rate_limit($db,'talent-verification-code',(string)$user['id'],8);
+        if (!preg_match('/^[0-9]{6}$/D',$code)) $error = 'Enter the six-digit verification code.';
+        if ($error === '') {
+            $db->begin_transaction();
+            $record = db_one($db, "SELECT * FROM talent_tokens WHERE account_id = ? AND token_hash = ? AND purpose = 'verify' AND used_at IS NULL AND expires_at > UTC_TIMESTAMP() FOR UPDATE", [(int)$user['id'],verification_code_hash((int)$user['id'],$code)]);
+            if ($record) {
+                db_run($db, "UPDATE talentprofile SET status = 'Verified' WHERE id = ? AND status = 'Unverified'", [$record['account_id']]);
+                db_run($db, "UPDATE talent_tokens SET used_at = UTC_TIMESTAMP() WHERE account_id = ? AND purpose = 'verify' AND used_at IS NULL", [$record['account_id']]);
+                $db->commit(); session_regenerate_id(true); $_SESSION = $pendingJob ? ['pending_job'=>$pendingJob] : [];
+                flash('Email verified. Sign in to build your profile.');
+                redirect('/users/talents/talentlogin.php');
+            }
+            $db->rollback();
+            $error = 'That code is invalid or expired. Request a new code and try again.';
+        }
+    } elseif ($mode === 'newpassword') {
+        $purpose = 'reset';
         $password = is_string($_POST['new_password'] ?? null) ? $_POST['new_password'] : '';
         $confirm = is_string($_POST['confirm_password'] ?? null) ? $_POST['confirm_password'] : '';
-        if ($mode === 'newpassword' && $error === '') $error = password_error($password, $confirm) ?? '';
+        if (!preg_match('/^[a-f0-9]{64}$/D', $token)) $error = 'This link is invalid. Request a new one.';
+        if ($error === '') $error = password_error($password, $confirm) ?? '';
         if ($error === '') {
             $db->begin_transaction();
             $record = db_one($db, 'SELECT * FROM talent_tokens WHERE token_hash = ? AND purpose = ? AND used_at IS NULL AND expires_at > UTC_TIMESTAMP() FOR UPDATE', [hash('sha256',$token), $purpose]);
             if (!$record) { $db->rollback(); $error = 'This link has expired or has already been used. Request a new one.'; }
             else {
-                if ($purpose === 'verify') db_run($db, "UPDATE talentprofile SET status = 'Verified' WHERE id = ? AND status = 'Unverified'", [$record['account_id']]);
-                else db_run($db, 'UPDATE talentprofile SET password = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $record['account_id']]);
+                db_run($db, 'UPDATE talentprofile SET password = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $record['account_id']]);
                 db_run($db, 'UPDATE talent_tokens SET used_at = UTC_TIMESTAMP() WHERE account_id = ? AND purpose = ? AND used_at IS NULL', [$record['account_id'], $purpose]);
                 $db->commit(); session_regenerate_id(true); $_SESSION = $pendingJob ? ['pending_job'=>$pendingJob] : [];
-                flash($purpose === 'verify' ? 'Email verified. Sign in to build your profile.' : 'Password updated. Sign in with your new password.');
+                flash('Password updated. Sign in with your new password.');
                 redirect('/users/talents/talentlogin.php');
             }
         }
@@ -94,7 +126,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 $copy = [
  'login'=>['Talent profile sign in', 'Sign in to manage your professional profile.'],
  'signup'=>['Create a talent account', 'Your profile stays private until you choose to list it.'],
- 'verify'=>[$token === '' ? 'Check your inbox.' : 'Confirm your email.', 'Verify your email before entering your talent workspace.'],
+ 'verify'=>[$token === '' ? 'Enter your verification code.' : 'Confirm your email.', 'Enter the six-digit code sent to your email. It expires in 10 minutes.'],
  'reset'=>['Password recovery', 'Request a link to reset your talent account password.'],
  'newpassword'=>['Choose a new password.', 'Use a unique phrase of 12–72 characters.'],
 ];
@@ -108,7 +140,11 @@ if (in_array($mode, ['login','signup','reset'], true)) echo '<div class="field">
 if ($mode === 'login' || $mode === 'signup') talent_password_field('password','Password',$mode === 'signup');
 if ($mode === 'newpassword') talent_password_field('new_password','New password');
 if ($mode === 'signup' || $mode === 'newpassword') talent_password_field('confirm_password','Confirm password');
-$labels = ['login'=>'Sign in','signup'=>'Create talent account','verify'=>$token === '' ? 'Resend verification email' : 'Verify email address','reset'=>'Send reset link','newpassword'=>'Save new password'];
-if ($mode !== 'verify' || $token !== '' || !empty($_SESSION['talent_verification_id'])) echo '<button class="button" type="submit">' . e($labels[$mode]) . '</button>';
-echo '</form><p class="form-after"><a class="text-link" href="/users/talents/talentlogin.php">Talent sign in</a> · <a class="text-link" href="/users/talents/talentsignup.php">Create an account</a></p><p class="form-after"><a class="text-link" href="/users/talents/resetpassword.php">Forgot your password?</a> · <a class="text-link" href="/users/admin/login.php">Business sign in</a></p>';
+$labels = ['login'=>'Sign in','signup'=>'Create talent account','verify'=>'Verify email address','reset'=>'Send reset link','newpassword'=>'Save new password'];
+if ($mode === 'verify' && $token === '') {
+    if (!empty($_SESSION['talent_verification_id'])) echo '<div class="field"><label for="verification_code">Six-digit code</label><input id="verification_code" name="verification_code" type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" required></div><button class="button" type="submit" name="action" value="verify">Verify email address</button>';
+} elseif ($mode !== 'verify' || $token !== '') echo '<button class="button" type="submit">' . e($labels[$mode]) . '</button>';
+echo '</form>';
+if ($mode === 'verify' && $token === '' && !empty($_SESSION['talent_verification_id'])) echo '<form method="post" class="form-after">' . csrf_field() . '<button class="text-link text-button-link" type="submit" name="action" value="resend">Resend code</button></form>';
+echo '<p class="form-after"><a class="text-link" href="/users/talents/talentlogin.php">Talent sign in</a> · <a class="text-link" href="/users/talents/talentsignup.php">Create an account</a></p><p class="form-after"><a class="text-link" href="/users/talents/resetpassword.php">Forgot your password?</a> · <a class="text-link" href="/users/admin/login.php">Business sign in</a></p>';
 auth_end();

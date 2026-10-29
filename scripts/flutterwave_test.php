@@ -15,12 +15,18 @@ $initialize=function($method,$path,$payload)use(&$calls){
     check_flw($method==='POST' && $path==='/payments','Flutterwave uses hosted server checkout');
     check_flw($payload['currency']==='USD' && $payload['amount']==='2.21','USD amount uses decimal dollars, not minor units');
     check_flw(str_starts_with($payload['redirect_url'],'http://127.0.0.1:8000/'),'Callback uses configured local origin');
-    $expected=hash('sha256',$payload['amount'].'USD'.$payload['customer']['email'].$payload['tx_ref'].hash('sha256',config('FLUTTERWAVE_SECRET_KEY')));
+    $expected=hash('sha256',$payload['amount'].'USD'.$payload['customer']['email'].$payload['tx_ref'].hash('sha256',billing_provider_config('FLUTTERWAVE','SECRET_KEY')));
     check_flw(hash_equals($expected,$payload['payload_hash']),'Checkout payload hash binds stored amount, currency, customer and reference');
     return ['status'=>'success','data'=>['link'=>'https://checkout.flutterwave.com/v3/hosted/pay/local-fixture']];
 };
 try {
     check_flw(flutterwave_ready(),'Flutterwave test configuration recognized');
+    putenv('FLUTTERWAVE_TEST_SECRET_KEY=FLWSECK_TEST-modefixture-X');
+    putenv('FLUTTERWAVE_TEST_WEBHOOK_HASH=mode-fixture-webhook-hash-at-least-32-chars');
+    check_flw(billing_provider_config('FLUTTERWAVE','SECRET_KEY')==='FLWSECK_TEST-modefixture-X','Mode-specific test key is selected');
+    check_flw(billing_provider_config('FLUTTERWAVE','WEBHOOK_HASH')==='mode-fixture-webhook-hash-at-least-32-chars','Mode-specific test webhook hash is selected');
+    putenv('FLUTTERWAVE_TEST_SECRET_KEY');
+    putenv('FLUTTERWAVE_TEST_WEBHOOK_HASH');
     check_flw(billing_quote(['project'=>'1'],'USD')['amount']===221,'Source conversion rounds one project month to USD 2.21');
     check_flw(billing_quote(['project'=>'2'],'USD')['amount']===441,'Source conversion rounds the cart once: two project months USD 4.41');
     check_flw(billing_quote(['project'=>'1','strategy'=>'1'],'USD')['amount']===441,'Combined cart avoids independent line-rounding overcharge');
@@ -54,7 +60,7 @@ try {
     $other=create_billing_order($db,$user,['project'=>'1'],bin2hex(random_bytes(32)),$initialize,'USD');
     $duplicate=array_replace($payment,['tx_ref'=>$other['reference']]);
     reject_flw(fn()=>verify_billing_order($db,$other,fn()=>['status'=>'success','data'=>$duplicate]),PaymentMismatch::class,'Flutterwave ID cannot fulfill two Flutterwave orders');
-    check_flw(!flutterwave_valid_signature('') && !flutterwave_valid_signature('forged') && flutterwave_valid_signature(config('FLUTTERWAVE_WEBHOOK_HASH')),'Webhook validates configured secret hash');
+    check_flw(!flutterwave_valid_signature('') && !flutterwave_valid_signature('forged') && flutterwave_valid_signature(billing_provider_config('FLUTTERWAVE','WEBHOOK_HASH')),'Webhook validates configured secret hash');
     putenv('PAYSTACK_MODE=live');check_flw(!flutterwave_ready(),'Test credential cannot enable live checkout');
     check_flw(!billing_module_active($db,(int)$user['company_id'],'projects'),'Test dollar payment cannot unlock live editing');
     putenv('PAYSTACK_MODE=test');putenv('BILLING_USD_RATE=bad');check_flw(!flutterwave_ready(),'Invalid conversion configuration disables dollar checkout');
