@@ -73,7 +73,7 @@ suite_start('Messages','messages',$user);
   <section class="panel" style="min-height:620px;">
     <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
       <div><h2 id="thread-title"><?= e($initialConversationRow ? chat_conversation_title($db,$initialConversationRow,$identity) : 'Select a conversation') ?></h2><small id="thread-kind" class="subtle"><?= $initialConversationRow ? e(ucfirst($initialConversationRow['kind']) . ' chat') : '' ?></small></div>
-      <span class="count-label" id="thread-status">Connecting…</span>
+      <div style="display:flex;align-items:center;gap:.65rem;"><button type="button" class="button small secondary" id="open-share" disabled>Share selected</button><span class="count-label" id="thread-status">Connecting…</span></div>
     </div>
     <div id="message-thread" aria-live="polite" style="height:440px;overflow:auto;padding:1rem;background:#f7faf9;border-radius:12px;border:1px solid #e4ece9;margin:0 1rem 1rem;">
       <div class="empty-state compact"><h3><?= $initialConversation ? 'Loading conversation…' : 'Choose a teammate or create a group to begin.' ?></h3></div>
@@ -103,7 +103,7 @@ suite_start('Messages','messages',$user);
   let activeConversation = initialConversation;
   let conversations = [];
   let selectedReferences = [];
-  let sharingMessage = 0;
+  let sharingMessages = [];
   let searchTimer = 0;
   const thread = document.getElementById('message-thread');
   const title = document.getElementById('thread-title');
@@ -112,6 +112,7 @@ suite_start('Messages','messages',$user);
   const composer = document.getElementById('message-input');
   const suggestionBox = document.getElementById('reference-suggestions');
   const sendButton = document.getElementById('send-message');
+  const openShareButton = document.getElementById('open-share');
   const sharePanel = document.getElementById('share-panel');
 
   function escapeHtml(value) {
@@ -184,7 +185,7 @@ suite_start('Messages','messages',$user);
         (quoted ? '<blockquote style="margin:.25rem 0 .55rem;padding:.6rem .7rem;border-left:3px solid #cce987;background:rgba(127,160,139,.12);border-radius:4px;"><small>Shared message</small><div>' + renderBody(message.quote_text,message.references || []) + '</div>' + (message.quote_url ? '<a href="' + escapeHtml(message.quote_url) + '" style="color:inherit;">Open original conversation</a>' : '') + '</blockquote>' : '') +
         (message.body ? '<div>' + renderBody(message.body,message.references) + '</div>' : '') +
         '<div style="font-size:.7rem;opacity:.75;margin-top:.4rem;text-align:right;">' + escapeHtml(new Date(message.created_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})) + '</div>' +
-        '<button type="button" data-share-message="' + Number(message.id) + '" style="margin-top:.3rem;border:0;background:transparent;color:inherit;text-decoration:underline;cursor:pointer;font-size:.75rem;">Share message</button>' +
+        '<label style="display:flex;align-items:center;gap:.35rem;margin-top:.3rem;font-size:.75rem;"><input type="checkbox" data-share-select value="' + Number(message.id) + '"> Select to share</label>' +
         '</div></article>';
     }).join('');
     if (wasAtBottom) thread.scrollTop = thread.scrollHeight;
@@ -214,15 +215,28 @@ suite_start('Messages','messages',$user);
     if (selected) select.value = selected;
   }
 
-  async function openConversation(conversationId) {
+  async function openConversation(conversationId,preserveSelection) {
     activeConversation = Number(conversationId);
     sendButton.disabled = !activeConversation;
+    if (!preserveSelection) {
+      openShareButton.disabled = true;
+      sharingMessages = [];
+      sharePanel.hidden = true;
+    }
     suggestionBox.hidden = true;
     renderConversationList();
     const payload = await get('thread',{conversation:activeConversation});
     title.textContent = payload.conversation.title;
     kind.textContent = payload.conversation.kind === 'group' ? 'Group chat' : 'Direct message';
     renderMessages(payload.messages || []);
+    if (preserveSelection) {
+      sharingMessages.forEach((id) => {
+        const checkbox = thread.querySelector('[data-share-select][value="' + id + '"]');
+        if (checkbox) checkbox.checked = true;
+      });
+      sharingMessages = sharingMessages.filter((id) => thread.querySelector('[data-share-select][value="' + id + '"]'));
+      openShareButton.disabled = sharingMessages.length === 0;
+    }
     status.textContent = 'Live';
     const url = new URL(window.location.href);
     url.searchParams.set('conversation',String(activeConversation));
@@ -232,7 +246,7 @@ suite_start('Messages','messages',$user);
   async function refresh() {
     try {
       await loadConversations();
-      if (activeConversation) await openConversation(activeConversation);
+      if (activeConversation) await openConversation(activeConversation,true);
       else status.textContent = 'Live';
     } catch (error) {
       status.textContent = 'Connection issue';
@@ -376,32 +390,43 @@ suite_start('Messages','messages',$user);
     if (event.key === 'Escape') suggestionBox.hidden = true;
   });
 
-  thread.addEventListener('click',function (event) {
-    const button = event.target.closest('[data-share-message]');
-    if (!button) return;
-    sharingMessage = Number(button.dataset.shareMessage);
+  thread.addEventListener('change',function () {
+    sharingMessages = Array.from(thread.querySelectorAll('[data-share-select]:checked')).map((checkbox) => Number(checkbox.value));
+    openShareButton.disabled = sharingMessages.length === 0;
+  });
+
+  openShareButton.addEventListener('click',function () {
+    if (!sharingMessages.length) return;
     document.getElementById('share-status').textContent = '';
     sharePanel.hidden = false;
     document.getElementById('share-target').focus();
   });
 
   document.getElementById('cancel-share').addEventListener('click',function () {
-    sharingMessage = 0;
     sharePanel.hidden = true;
   });
 
   document.getElementById('share-message').addEventListener('click',async function () {
     const target = document.getElementById('share-target').value;
     const message = document.getElementById('share-status');
-    if (!sharingMessage || !target) {
+    if (!sharingMessages.length || !target) {
       message.textContent = 'Choose a destination conversation.';
       return;
     }
     message.textContent = 'Sharing…';
     try {
-      await request('share',{message_id:String(sharingMessage),conversation:target});
+      await request('share',{
+        message_ids:JSON.stringify(sharingMessages),
+        source_conversation:String(activeConversation),
+        conversation:target
+      });
       sharePanel.hidden = true;
-      sharingMessage = 0;
+      sharingMessages.forEach((id) => {
+        const checkbox = thread.querySelector('[data-share-select][value="' + id + '"]');
+        if (checkbox) checkbox.checked = false;
+      });
+      sharingMessages = [];
+      openShareButton.disabled = true;
       await loadConversations();
       status.textContent = 'Message shared.';
     } catch (error) {

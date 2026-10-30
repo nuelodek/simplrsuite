@@ -16,7 +16,7 @@ first column.
 | Finance: expenses, ledger, inventory | Available as records | Recordkeeping and reports. | Not audited statements; reconcile with an accountant. |
 | Accounting (chart of accounts, journal) | Available as records | Double-entry journal with balance check, trial balance and reports. | Not a tax or statutory filing tool. |
 | Invoice register | Limited | A register of invoices you issued elsewhere. | Does not issue legally compliant or tax invoices, send invoices or collect payment. |
-| Payroll | Limited | Company-scoped NGN salary profiles, draft and approved pay runs with independent owner/HR approval, employee payslips, manually entered PAYE/pension/NHF/other deduction amounts, bank-transfer CSV exports, and a tenant-scoped Salary Vault ledger. Verified Paystack top-ups and independently reconciled bank deposits can fund the Vault; Paystack salary transfers reserve cleared allocations first. | No automatic Nigerian tax/statutory calculation or filing; professional verification is required. Top-ups and transfers are disabled unless separately configured. The Vault is an auditable allocation against a shared Paystack merchant balance, not a segregated account or custodial wallet. No bank feeds or live bank balances. HR penalties are never imported or deducted automatically. |
+| Payroll | Limited | Company-scoped NGN salary profiles, draft and approved pay runs with independent owner/HR approval, employee payslips, manually entered PAYE/pension/NHF/other deduction amounts, bank-transfer CSV exports, and a tenant-scoped Salary Vault ledger. Verified Paystack top-ups and independently reconciled bank deposits can fund the Vault; manual deposits must already be in the same Paystack payout funding pool. Paystack salary transfers reserve cleared allocations first. | No automatic Nigerian tax/statutory calculation or filing; professional verification is required. Top-ups and transfers are disabled unless separately configured. The Vault is an auditable allocation against a shared Paystack merchant balance, not a segregated account or custodial wallet. No bank feeds or live bank balances. HR penalties are never imported or deducted automatically. |
 | Banking | **Not built** | — | No bank feeds or balances. General bank transfers are unavailable; payroll payouts are limited to the separate workflow above. Legacy banking demo pages are blocked. |
 | Alerts, task queries, penalties | Available | In-app alerts, email (instant or digest), formal queries with response windows, owner-approved penalties, appeals. | Needs the scheduler running every minute in production (`deploy/scheduler.md`). |
 | Recruiting and talent directory | Available | Job posts, public job pages, applications with private resumes, interviews, shortlist, talent profiles that start private. | Talent account recovery and consent flows still need the end-to-end review listed in `requirements.html`. |
@@ -35,7 +35,8 @@ first column.
 
 - Payroll includes a tenant-scoped, immutable Salary Vault ledger. Paystack top-ups
   are credited only after server-side transaction verification; manual deposits
-  need an independent owner/employee reconciliation. Each payroll run requires
+  need an independent owner/employee reconciliation and must already be in the
+  Paystack payout funding pool. Each payroll run requires
   independent approval, and Paystack payouts reserve the tenant allocation before
   submission. Provider funds are pooled operationally, not segregated. Statutory
   amounts remain user-entered and require professional validation.

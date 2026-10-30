@@ -314,21 +314,27 @@ function chat_api(mysqli $db, array $user, array $identity): never {
     }
 
     if ($action === 'share') {
-        $sourceId = filter_var($_POST['message_id'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        $sourceIds = json_decode(is_string($_POST['message_ids'] ?? null) ? $_POST['message_ids'] : '[]',true);
+        $sourceConversationId = filter_var($_POST['source_conversation'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $targetId = filter_var($_POST['conversation'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
-        $source = $sourceId ? db_one($db,'SELECT m.*, c.name AS conversation_name FROM chat_messages m JOIN chat_conversations c ON c.company_id = m.company_id AND c.id = m.conversation_id JOIN chat_members mine ON mine.company_id = m.company_id AND mine.conversation_id = m.conversation_id AND mine.member_role = ? AND mine.member_id = ? WHERE m.company_id = ? AND m.id = ?',[$identity['role'],$identity['id'],$companyId,$sourceId]) : null;
+        if (!is_array($sourceIds) || !$sourceIds || count($sourceIds) > 20 || !$sourceConversationId) fail('Select up to 20 messages from the current conversation.',422);
+        $sourceIds = array_values(array_unique(array_filter(array_map('intval',$sourceIds),static fn(int $id): bool => $id > 0)));
+        if (!$sourceIds || !chat_is_member($db,$companyId,(int)$sourceConversationId,$identity)) fail('This source conversation could not be found.',403);
+        $marks = implode(',',array_fill(0,count($sourceIds),'?'));
+        $sources = db_rows($db,"SELECT m.* FROM chat_messages m WHERE m.company_id = ? AND m.conversation_id = ? AND m.id IN ($marks) ORDER BY m.id",[$companyId,$sourceConversationId,...$sourceIds]);
         $target = $targetId ? chat_conversation($db,$companyId,(int)$targetId,$identity) : null;
-        if (!$source || !$target) fail('Choose a message and a conversation you can access.',403);
-        $quote = (string)$source['body'];
-        foreach (db_rows($db,'SELECT token,label FROM chat_message_refs WHERE company_id = ? AND message_id = ?',[$companyId,$sourceId]) as $reference) $quote = str_replace('[[ref:' . $reference['token'] . ']]','@' . $reference['label'],$quote);
+        if (count($sources) !== count($sourceIds) || !$target) fail('Choose messages and a destination conversation you can access.',403);
         $db->begin_transaction();
         try {
-            db_run($db,'INSERT INTO chat_messages (company_id,conversation_id,sender_role,sender_id,body,quote_text,quote_conversation_id) VALUES (?,?,?,?,?,?,?)',[$companyId,$targetId,$identity['role'],$identity['id'],'',(string)$quote,(int)$source['conversation_id']]);
-            $messageId = (int)$db->insert_id;
+            foreach ($sources as $source) {
+                $quote = (string)$source['body'];
+                foreach (db_rows($db,'SELECT token,label FROM chat_message_refs WHERE company_id = ? AND message_id = ?',[$companyId,$source['id']]) as $reference) $quote = str_replace('[[ref:' . $reference['token'] . ']]','@' . $reference['label'],$quote);
+                db_run($db,'INSERT INTO chat_messages (company_id,conversation_id,sender_role,sender_id,body,quote_text,quote_conversation_id) VALUES (?,?,?,?,?,?,?)',[$companyId,$targetId,$identity['role'],$identity['id'],'',(string)$quote,(int)$source['conversation_id']]);
+            }
             db_run($db,'UPDATE chat_conversations SET updated_at = UTC_TIMESTAMP() WHERE id = ? AND company_id = ?',[$targetId,$companyId]);
             $db->commit();
         } catch (Throwable $error) { $db->rollback(); throw $error; }
-        json_response(['ok'=>true,'id'=>$messageId]);
+        json_response(['ok'=>true,'shared'=>count($sources)]);
     }
 
     fail('Choose a valid messaging action.',422);

@@ -252,7 +252,8 @@ self-approve. The Salary Vault tracks a cleared, tenant-scoped NGN allocation in
 an auditable ledger. Paystack top-ups are disabled unless
 `SALARY_VAULT_PAYSTACK_TOPUPS_ENABLED=true` and are credited only after
 server-side transaction verification. External bank deposits require a distinct
-owner/employee reconciliation before credit. Paystack's provider balance is
+owner/employee reconciliation before credit, and must already be in the same
+Paystack payout funding pool before approval. Paystack's provider balance is
 shared operationally across workspaces; the Vault is an allocation ledger, not a
 segregated bank account or custodial wallet. Payroll transfers require sufficient
 cleared Vault funds, reserve them before provider submission, and return funds

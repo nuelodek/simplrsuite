@@ -55,3 +55,7 @@ CREATE TABLE IF NOT EXISTS salary_vault_fundings (
 ALTER TABLE payroll_runs
   ADD COLUMN created_by_role VARCHAR(16) NOT NULL DEFAULT 'admin' AFTER created_by,
   ADD COLUMN approved_by_role VARCHAR(16) NULL DEFAULT NULL AFTER approved_by;
+
+UPDATE payroll_runs
+SET status = 'pending_approval', approved_by = NULL, approved_by_role = NULL, approved_at = NULL
+WHERE status = 'approved' AND approved_by_role IS NULL;
