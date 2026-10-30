@@ -19,7 +19,9 @@ function workspace_user(mysqli $db): array {
 
 function assignable_modules(): array {
     // Directory changes and account invitations remain business-owner operations.
-    return array_diff_key(modules(), array_flip(['employees','managers','departments','teams']));
+    return array_diff_key(modules(), array_flip(['employees','managers','departments','teams'])) + [
+        'payroll'=>['title'=>'Payroll','description'=>'Review your approved payslips and payment status.','nav'=>'finance','icon'=>'wallet','singular'=>'payroll record'],
+    ];
 }
 
 function module_access(mysqli $db, array $user, string $key, bool $lock = false): string {

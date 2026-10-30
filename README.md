@@ -50,7 +50,12 @@ database. No JavaScript build step is needed.
    `MAIL_TRANSPORT`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `SMTP_HOST`, `SMTP_PORT`,
    `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_ENCRYPTION`; `GITHUB_CLIENT_ID`,
    `GITHUB_CLIENT_SECRET`, `GITHUB_SYNC_MINUTES`, `CURL_CA_BUNDLE`;
-   `PAYSTACK_ENABLED`, `PAYSTACK_MODE`, `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_ENABLED`,
+   `QUICKBOOKS_CLIENT_ID`, `QUICKBOOKS_CLIENT_SECRET`, `QUICKBOOKS_ENVIRONMENT`;
+   `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`; `WORKDAY_HOST`, `WORKDAY_TENANT`,
+   `WORKDAY_CLIENT_ID`, `WORKDAY_CLIENT_SECRET`, `WORKDAY_SCOPES`;
+   `ZOHO_BOOKS_CLIENT_ID`, `ZOHO_BOOKS_CLIENT_SECRET`, `ZOHO_BOOKS_REGION`;
+   `PAYSTACK_ENABLED`, `PAYSTACK_MODE`, `PAYSTACK_SECRET_KEY`,
+   `PAYROLL_PAYSTACK_TRANSFERS_ENABLED`, `FLUTTERWAVE_ENABLED`,
    `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_HASH`, `BILLING_USD_RATE`,
    `BILLING_ENFORCE`; the `LINKEDIN_*`, `FACEBOOK_*` and `INSTAGRAM_*` job-posting
    keys; and the `PRIVACY_*` business identity. Leave unused settings out (or
@@ -222,22 +227,40 @@ payroll deductions, post accounting entries, or impose a penalty automatically.
 Configure the default response window and warning expiry under Workspace
 settings.
 
+Payroll supports company-scoped NGN compensation profiles, draft and approved
+monthly pay runs, employee payslips, editable per-run statutory deduction
+amounts, bank-transfer CSV exports with manual payment-reference tracking, and
+individual Paystack transfers after the owner enables and verifies the payout
+configuration. Bank account numbers are
+encrypted at rest. Pay run approval locks compensation lines; transfer requests
+are individually confirmed and ambiguous provider outcomes are locked against
+automatic retries until reconciled. Payroll does not calculate or file Nigerian
+tax, pension, or housing-fund obligations. Have a qualified payroll professional
+verify each amount before approval. HR penalties are never imported as payroll
+deductions.
+
 Billing offers **Paystack for NGN and Flutterwave for USD**, following the original
 `simplr24` currency/provider choice. The server owns prices, conversion, orders and
 payment verification. Checkout remains disabled without provider configuration.
 See `work/payment-launch.md` for source pricing, setup, tests and remaining gates.
 The Integrations page also lists all 50 services advertised by the old dashboard
-as **Not connected**; their old buttons did not implement API connections. It
-shows the matching local logos that were available for PayPal, Plaid, QuickBooks,
-Square and Xero. The remaining legacy entries need proper connector work and
-assets before they can be offered as functional integrations. Sandbox checkout
-also remains disabled until fresh Paystack and Flutterwave server-side test
-credentials are configured; the old public key and exposed legacy secret are not
-reused.
+as future requests; their old buttons did not implement API connections. GitHub
+supports repository issue sync. QuickBooks Online, Xero and Zoho Books support
+provider authorization and read-only company/organization verification; Workday
+supports tenant authorization only. These connectors do not import, export or
+modify accounting records or read worker records. Configure provider credentials
+in the server environment and follow the setup guides:
+[QuickBooks](docs/quickbooks-integration.md), [Xero](docs/xero-integration.md),
+[Workday](docs/workday-integration.md), and
+[Zoho Books](docs/zoho-books-integration.md). No live provider credentials or
+calls are part of local verification. Sandbox checkout also remains disabled
+until fresh Paystack and Flutterwave server-side test credentials are configured;
+the old public key and exposed legacy secret are not reused.
 
-Amounts in existing finance tables are recorded amounts; this build does not
-execute payroll payments, calculate statutory payroll, issue compliant tax invoices, or
-fetch live banking balances. The invoice area is an invoice register. The Accounting
+Amounts in existing finance tables are recorded amounts; payroll transfers are
+available only through the separately configured, explicit Paystack workflow. This
+build does not calculate statutory payroll, issue compliant tax invoices, or fetch
+live banking balances. The invoice area is an invoice register. The Accounting
 page provides a separate company-scoped chart of accounts, balanced journal entries,
 an income statement, a balance sheet and three management ratios. Existing ledger
 records are not imported; enter opening balances as a balanced journal entry. These

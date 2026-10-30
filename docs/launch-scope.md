@@ -1,10 +1,11 @@
 # Launch scope: what works, what is limited, what is not built
 
-For owner approval before launch. Each row is checked against the code on 27 Oct
+For owner approval before launch. Each row is checked against the code on 30 Oct
 2026. "Available" means it works end to end in the local build and has automated
 tests; it does not mean production hosting, email delivery or a payment provider has
-been verified. Marketing pages, pricing, support scripts and sales conversations
-should promise only the first column.
+been verified. "Limited" describes intentionally narrower functionality. Marketing
+pages, pricing, support scripts and sales conversations should promise only the
+first column.
 
 | Area | Status | What customers get | What they do not get |
 | --- | --- | --- | --- |
@@ -15,13 +16,14 @@ should promise only the first column.
 | Finance: expenses, ledger, inventory | Available as records | Recordkeeping and reports. | Not audited statements; reconcile with an accountant. |
 | Accounting (chart of accounts, journal) | Available as records | Double-entry journal with balance check, trial balance and reports. | Not a tax or statutory filing tool. |
 | Invoice register | Limited | A register of invoices you issued elsewhere. | Does not issue legally compliant or tax invoices, send invoices or collect payment. |
-| Payroll | **Not built** | — | No pay runs, payslips, statutory deductions or payouts. Penalty deductions are recorded for HR only and never paid or deducted. |
-| Banking | **Not built** | — | No bank feeds, balances or transfers. Legacy banking demo pages are blocked. |
+| Payroll | Limited | Company-scoped NGN salary profiles, draft and approved pay runs, employee payslips, manually entered PAYE/pension/NHF/other deduction amounts, bank-transfer CSV exports, and individually initiated Paystack transfers when explicitly configured. | No automatic Nigerian tax/statutory calculation or filing; professional verification is required. Paystack transfers are disabled unless separately configured; no bank feeds or balances. HR penalties are never imported or deducted automatically. |
+| Banking | **Not built** | — | No bank feeds or balances. General bank transfers are unavailable; payroll payouts are limited to the separate workflow above. Legacy banking demo pages are blocked. |
 | Alerts, task queries, penalties | Available | In-app alerts, email (instant or digest), formal queries with response windows, owner-approved penalties, appeals. | Needs the scheduler running every minute in production (`deploy/scheduler.md`). |
 | Recruiting and talent directory | Available | Job posts, public job pages, applications with private resumes, interviews, shortlist, talent profiles that start private. | Talent account recovery and consent flows still need the end-to-end review listed in `requirements.html`. |
 | Job posting to LinkedIn, Facebook, Instagram | Limited | Works only after the Simplr team configures each platform's keys; otherwise shown as "Not connected". | Self-service connection. |
 | GitHub | Available | One-click connect (several accounts), issues, PRs and commits on projects, issue-to-task sync with assignee matching, scheduled sync. | Writing back to GitHub. |
-| Other integrations (QuickBooks, Slack, Google, ADP and others in the catalog) | **Not built** | Listed as "not connected yet" so customers can vote. | Any working connector. |
+| Accounting and people-system connections | Limited | QuickBooks Online, Xero and Zoho Books authorize a provider account and verify the selected company/organization; Workday authorizes a configured tenant. Tokens are encrypted at rest; accounting connections support verification and disconnect, while Workday supports disconnect. | No accounting records are imported, exported or modified; Workday worker data is not read. Provider credentials, callback registration and production access are not verified locally. See the [connection setup guides](quickbooks-integration.md). |
+| Other future integrations (Slack, Google, ADP and others in the catalog) | **Not built** | Listed as future requests. | No working connector. |
 | Files and attachments | Available | Private uploads (PDF, images, CSV, macro-free Office files), Files library, per-tool permissions, quotas. | Antivirus scanning (owner decision pending). |
 | Search, reports, CSV export | Available | Workspace search limited to the tools a person can open; CSV exports with spreadsheet-formula protection. | — |
 | Direct messaging | **Not built** | — | Legacy chat pages are blocked. |
@@ -29,20 +31,23 @@ should promise only the first column.
 | Subscriptions | Limited | Paystack (NGN) and Flutterwave (USD) checkout in test mode; entitlements per tool. | Live mode, automatic renewals, refunds and disputes are not enabled; billing enforcement is off until the owner signs off. |
 | Support and help | Limited | Private help requests from staff to the workspace owner. | A Simplr support desk or service-level promise. |
 
-## Changes made in this review
+## Review notes
 
-- The integrations page said bank accounts, payouts and payroll "need a connected
-  provider before they can be used", which implied they work once connected. It now
-  says Simplr does not run payroll, payouts or bank balances yet, with the badge "Not
-  available yet".
-- No other reachable page claimed payroll, tax invoices, bank balances, messaging,
-  attendance or benefits. The README already lists these limits.
+- Payroll now supports pay-run records, payslips, bank-file exports, and guarded
+  Paystack transfer actions. Statutory amounts remain user-entered and require
+  professional validation; bank transfers remain separately configured.
+- GitHub repository sync and the QuickBooks Online, Xero, Workday and Zoho Books
+  connection-only flows are described at their actual implemented scope. No
+  connector in this group provides payroll, bank feeds, accounting-record sync or
+  worker-data sync.
+- Tax invoices, bank balances, messaging, attendance and benefits remain unavailable.
 
 ## Decisions the owner needs to make
 
 1. Approve this table as the launch promise, or name rows to change.
-2. Pricing page and sales material: confirm they match the table, especially
-   "Finance & inventory" (records only, no payroll despite its internal key name).
+2. Pricing page and sales material: confirm how payroll should be packaged. The
+   existing "Finance & inventory" toolkit remains records-focused; payroll is a
+   separate, limited workflow and is not statutory tax software.
 3. Whether to keep the "more integrations on the way" catalog visible at launch.
 4. Whether to delete the blocked legacy pages (banking demo, chat, old subscription
    pages) instead of only blocking them; `docs/dependencies.md` lists the outdated
