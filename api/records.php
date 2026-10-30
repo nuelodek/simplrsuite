@@ -4,6 +4,8 @@ require_once __DIR__ . '/../app/modules.php';
 require_once __DIR__ . '/../app/archive.php';
 $db = database(); $user = workspace_user($db);
 $key = is_string($_GET['module'] ?? null) ? $_GET['module'] : '';
+if ($key === 'pos') fail('Use the Point of sale workspace for checkout and sale management.', 404);
+if ($key === 'messages') fail('Use the Messages workspace for conversations.', 404);
 $module = module_config($key); $companyId = (int)$user['company_id'];
 require_module_access($db,$user,$key,($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET');
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {

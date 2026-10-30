@@ -6,7 +6,7 @@ function billing_catalog(): array {
     return [
         'payroll'=>['name'=>'Finance & inventory','amount'=>300000,'modules'=>['expenses','ledger','inventory','invoices']],
         'recruiting'=>['name'=>'Recruiting','amount'=>250000,'modules'=>['jobs','applications']],
-        'crm'=>['name'=>'Sales & CRM','amount'=>400000,'modules'=>['leads','customers','contacts','accounts','deals']],
+        'crm'=>['name'=>'Sales & CRM','amount'=>400000,'modules'=>['leads','customers','contacts','accounts','deals','pos']],
         'cybersecurity'=>['name'=>'Security','amount'=>400000,'modules'=>['incidents']],
         'project'=>['name'=>'Projects & tasks','amount'=>350000,'modules'=>['projects','tasks','events']],
         'strategy'=>['name'=>'Business strategy','amount'=>350000,'modules'=>['objectives']],

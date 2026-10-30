@@ -16,7 +16,7 @@ first column.
 | Finance: expenses, ledger, inventory | Available as records | Recordkeeping and reports. | Not audited statements; reconcile with an accountant. |
 | Accounting (chart of accounts, journal) | Available as records | Double-entry journal with balance check, trial balance and reports. | Not a tax or statutory filing tool. |
 | Invoice register | Limited | A register of invoices you issued elsewhere. | Does not issue legally compliant or tax invoices, send invoices or collect payment. |
-| Payroll | Limited | Company-scoped NGN salary profiles, draft and approved pay runs, employee payslips, manually entered PAYE/pension/NHF/other deduction amounts, bank-transfer CSV exports, and individually initiated Paystack transfers when explicitly configured. | No automatic Nigerian tax/statutory calculation or filing; professional verification is required. Paystack transfers are disabled unless separately configured; no bank feeds or balances. HR penalties are never imported or deducted automatically. |
+| Payroll | Limited | Company-scoped NGN salary profiles, draft and approved pay runs with independent owner/HR approval, employee payslips, manually entered PAYE/pension/NHF/other deduction amounts, bank-transfer CSV exports, and a tenant-scoped Salary Vault ledger. Verified Paystack top-ups and independently reconciled bank deposits can fund the Vault; Paystack salary transfers reserve cleared allocations first. | No automatic Nigerian tax/statutory calculation or filing; professional verification is required. Top-ups and transfers are disabled unless separately configured. The Vault is an auditable allocation against a shared Paystack merchant balance, not a segregated account or custodial wallet. No bank feeds or live bank balances. HR penalties are never imported or deducted automatically. |
 | Banking | **Not built** | — | No bank feeds or balances. General bank transfers are unavailable; payroll payouts are limited to the separate workflow above. Legacy banking demo pages are blocked. |
 | Alerts, task queries, penalties | Available | In-app alerts, email (instant or digest), formal queries with response windows, owner-approved penalties, appeals. | Needs the scheduler running every minute in production (`deploy/scheduler.md`). |
 | Recruiting and talent directory | Available | Job posts, public job pages, applications with private resumes, interviews, shortlist, talent profiles that start private. | Talent account recovery and consent flows still need the end-to-end review listed in `requirements.html`. |
@@ -26,21 +26,26 @@ first column.
 | Other future integrations (Slack, Google, ADP and others in the catalog) | **Not built** | Planned catalog entries show disabled Connect buttons. | No working connector; the buttons do not connect accounts. |
 | Files and attachments | Available | Private uploads (PDF, images, CSV, macro-free Office files), Files library, per-tool permissions, quotas. | Antivirus scanning (owner decision pending). |
 | Search, reports, CSV export | Available | Workspace search limited to the tools a person can open; CSV exports with spreadsheet-formula protection. | — |
-| Direct messaging | Limited | Staff message records with sender/recipient history, delivery status, and workspace threading. | Live real-time chat, rich media, attachments or push notifications are not part of the launch scope. |
+| Direct messaging | Available | Company-scoped direct and group chats, teammate and workspace-record `@` references, mention notifications, and selected-message sharing with a link to the original conversation. Access follows the Messages toolkit grant. | Updates refresh every five seconds; no WebSocket service, rich media, attachments or push notifications. Apply migration `036_workspace_messaging.sql`. |
 | Attendance, leave, benefits | Limited | Attendance records, leave requests, and assigned benefits are tracked in the workspace; they connect to the modern employee directory and people UI. | No clock-in, leave balances, automated approval rules or benefits administration beyond assignment records. |
 | Subscriptions | Limited | Paystack (NGN) and Flutterwave (USD) checkout in test mode; entitlements per tool. | Live mode, automatic renewals, refunds and disputes are not enabled; billing enforcement is off until the owner signs off. |
 | Support and help | Limited | Private help requests from staff to the workspace owner. | A Simplr support desk or service-level promise. |
 
 ## Review notes
 
-- Payroll now supports pay-run records, payslips, bank-file exports, and guarded
-  Paystack transfer actions. Statutory amounts remain user-entered and require
-  professional validation; bank transfers remain separately configured.
+- Payroll includes a tenant-scoped, immutable Salary Vault ledger. Paystack top-ups
+  are credited only after server-side transaction verification; manual deposits
+  need an independent owner/employee reconciliation. Each payroll run requires
+  independent approval, and Paystack payouts reserve the tenant allocation before
+  submission. Provider funds are pooled operationally, not segregated. Statutory
+  amounts remain user-entered and require professional validation.
 - GitHub repository sync and the QuickBooks Online, Xero, Workday and Zoho Books
   connection-only flows are described at their actual implemented scope. No
   connector in this group provides payroll, bank feeds, accounting-record sync or
   worker-data sync.
-- Tax invoices, bank balances, messaging, attendance and benefits remain unavailable.
+- Tax invoices and bank balances remain unavailable. Messaging and attendance
+  have workspace implementations; leave balances and benefits administration
+  remain limited as described in the table.
 
 ## Decisions the owner needs to make
 

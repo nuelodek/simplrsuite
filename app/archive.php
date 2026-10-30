@@ -154,6 +154,7 @@ function change_record_archive(mysqli $db, array $viewer, string $key, int $id, 
         $blockers = archive_blockers($db,$companyId,$key,$id,$action === 'purge');
         if ($blockers) { $db->rollback(); fail(implode(' ',$blockers),409); }
         if ($action === 'purge') {
+            if ($key === 'tasks') db_run($db,'DELETE FROM task_work_sessions WHERE company_id = ? AND task_id = ?',[$companyId,$id]);
             $identityColumn = $key === 'employees' ? 'email' : 'manager_email';
             $identity = in_array($key,['employees','managers'],true) ? (string)$record[$identityColumn] : '';
             if ($identity !== '') {
@@ -170,6 +171,7 @@ function change_record_archive(mysqli $db, array $viewer, string $key, int $id, 
             audit_event($db,$companyId,'record.permanently_deleted',$key,(string)$id,['record_title'=>record_title($module,$record)]);
             db_run($db,"DELETE FROM `$table` WHERE `$pk` = ? AND company_id = ?",[$id,$companyId]);
         } else {
+            if ($key === 'tasks' && $action === 'archive') task_work_pause_task($db,$companyId,$id);
             $archivedAt = $action === 'archive' ? 'UTC_TIMESTAMP()' : 'NULL';
             $archivedBy = $action === 'archive' ? '?' : 'NULL';
             $params = $action === 'archive' ? [archive_actor_id($viewer),$id,$companyId] : [$id,$companyId];

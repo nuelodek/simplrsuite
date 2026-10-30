@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/access.php';
 require_once __DIR__ . '/richtext.php';
 require_once __DIR__ . '/webhooks.php';
+require_once __DIR__ . '/task-work.php';
 // This allowlist is shared by the HTML workspace and its record API. SQL identifiers
 // are never accepted from a request. Existing tables remain the source of truth.
 function field(string $label, string $type = 'text', bool $required = true, int $max = 255, array $options = []): array {
@@ -81,10 +82,10 @@ function modules(): array {
             'projectName'=>field('Project name'), 'projectDescription'=>field('Description','textarea',false,10000), 'milestoneName'=>field('Milestone name','text',false,160), 'milestoneDate'=>field('Milestone date','date',false), 'milestoneStatus'=>field('Milestone status','select',false,50,['not started','in progress','completed']), 'milestoneDescription'=>field('Milestone description','textarea',false,4000), 'startDate'=>field('Start date','date'), 'endDate'=>field('End date','date'), 'status'=>field('Status','select',true,50,['pending','ongoing','completed','on hold']), 'department'=>field('Department','ref:departments',false,50), 'projectManager'=>field('Project manager','ref:managers',false),
         ],'columns'=>['projectName','status','startDate','endDate','milestoneName','milestoneDate']],
         'tasks' => ['title'=>'Tasks','singular'=>'task','nav'=>'tasks','icon'=>'task','description'=>'Know what needs doing, what matters most, and what comes next.','table'=>'tasks','pk'=>'id','fields'=>[
-            'title'=>field('Task name'),'project_id'=>field('Project','ref:projects'), 'description'=>field('Description','textarea',false,10000),'due_date'=>field('Due date','date'),'priority'=>field('Priority','select',true,50,['low','medium','high']),'status'=>field('Status','select',true,50,['pending','ongoing','completed']),'assignee'=>field('Assigned to','ref:employees',false),
-        ],'columns'=>['title','due_date','priority','status']],
+            'title'=>field('Task name'),'project_id'=>field('Project','ref:projects'), 'description'=>field('Description','textarea',false,10000),'due_date'=>field('Due date','date'),'estimated_hours'=>field('Estimated effort (hours)','decimal_hours',false,10),'priority'=>field('Priority','select',true,50,['low','medium','high']),'status'=>field('Status','select',true,50,['pending','ongoing','completed']),'assignee'=>field('Assigned to','ref:employees',false),
+        ],'columns'=>['title','due_date','estimated_hours','priority','status']],
         'departments' => ['title'=>'Departments','singular'=>'department','nav'=>'people','icon'=>'users','description'=>'Build a clear structure for the people behind your business.','table'=>'departments','pk'=>'id','fields'=>['department_name'=>field('Department name','text',true,100),'location'=>field('Location','text',false),'manager_id'=>field('Department head','ref:managers',false)],'columns'=>['department_name','location','created_at']],
-        'messages' => ['title'=>'Messages','singular'=>'message','nav'=>'people','icon'=>'mail','description'=>'Keep direct conversations inside the workspace and maintain a clear staff trail.','table'=>'messages','pk'=>'id','fields'=>['sender_id'=>field('Sender','ref:employees',true,50),'recipient_id'=>field('Recipient','text',true,100),'message'=>field('Message','textarea',true,4000),'status'=>field('Status','select',true,12,['sent','delivered','read'])],'columns'=>['sender_id','recipient_id','status','timestamp']],
+        'messages' => ['title'=>'Messages','singular'=>'message','nav'=>'people','icon'=>'mail','description'=>'Chat in private direct and group conversations with linked workspace records.','table'=>'messages','pk'=>'id','fields'=>['sender_id'=>field('Sender','ref:employees',true,50),'recipient_id'=>field('Recipient','text',true,100),'message'=>field('Message','textarea',true,4000),'status'=>field('Status','select',true,12,['sent','delivered','read'])],'columns'=>['sender_id','recipient_id','status','timestamp']],
         'attendance' => ['title'=>'Attendance','singular'=>'attendance record','nav'=>'people','icon'=>'clock','description'=>'Track daily attendance, clock-ins, breaks, and time-off for the people on your team.','table'=>'attendance','pk'=>'id','fields'=>['employee_id'=>field('Employee','ref:employees',true,50),'date'=>field('Date','date',true),'status'=>field('Status','select',true,30,['clocked_in','clocked_out','on_break','on_leave'])],'columns'=>['employee_id','date','status','created_at']],
         'leave_requests' => ['title'=>'Leave requests','singular'=>'leave request','nav'=>'people','icon'=>'calendar','description'=>'Collect time-off requests, approval status, and leave dates in one place.','table'=>'leave_requests','pk'=>'id','fields'=>['employee_id'=>field('Employee','ref:employees',true,50),'leave_type'=>field('Type','select',true,40,['annual','sick','study','personal','maternity','paternity']),'start_date'=>field('Start date','date',true),'end_date'=>field('End date','date',true),'reason'=>field('Reason','textarea',false,4000),'status'=>field('Status','select',true,20,['pending','approved','rejected'])],'columns'=>['employee_id','leave_type','start_date','end_date','status']],
         'benefits' => ['title'=>'Benefits','singular'=>'benefit','nav'=>'people','icon'=>'shield','description'=>'Keep benefits, allowances, and employee support plans clearly assigned.','table'=>'benefits','pk'=>'id','fields'=>['benefit_name'=>field('Benefit name','text',true,100),'description'=>field('Description','textarea',false,255),'employee_id'=>field('Employee','ref:employees',true,50)],'columns'=>['benefit_name','employee_id','created_at']],
@@ -96,6 +97,7 @@ function modules(): array {
         'contacts' => ['title'=>'Contacts','singular'=>'contact','nav'=>'sales','icon'=>'users','description'=>'Keep your business conversations connected.','table'=>'contacts','pk'=>'contact_id','fields'=>['contact_name'=>field('Full name'),'contact_email'=>field('Email','email',false),'contact_phone'=>field('Phone','tel',false,20),'lead_id'=>field('Lead','ref:leads',false,50),'customer_id'=>field('Customer','ref:customer_codes',false,50)],'columns'=>['contact_name','contact_email','contact_phone']],
         'accounts' => ['title'=>'Customer accounts','singular'=>'account','nav'=>'sales','icon'=>'briefcase','description'=>'Organize the businesses and people you work with.','table'=>'accounts','pk'=>'account_id','fields'=>['account_owner'=>field('Account owner'),'account_email'=>field('Email','email',false),'account_phone'=>field('Phone','tel',false,20),'customer_id'=>field('Customer','ref:customer_codes'),'status'=>field('Status','select',true,50,['active','inactive'])],'columns'=>['account_owner','account_email','status']],
         'deals' => ['title'=>'Deals','singular'=>'deal','nav'=>'sales','icon'=>'chart','description'=>'Follow your opportunities from proposal to outcome.','table'=>'deals','pk'=>'deal_id','fields'=>['deal_with'=>field('Deal name'),'lead_id'=>field('Lead','ref:leads',false),'account_id'=>field('Account','ref:accounts',false),'amount'=>field('Amount','money'),'stage'=>field('Stage','select',true,50,['negotiation','proposal','won','lost'])],'columns'=>['deal_with','amount','stage','created_at']],
+        'pos' => ['title'=>'Point of sale','singular'=>'sale','nav'=>'sales','icon'=>'card','description'=>'Ring up retail sales, reserve inventory, manage register shifts, and track refunds.','table'=>'pos_sales','pk'=>'id','fields'=>[],'columns'=>[]],
         'invoices' => ['title'=>'Invoice register','singular'=>'invoice record','nav'=>'finance','icon'=>'wallet','description'=>'Track invoice dates, amounts, and payment status.','table'=>'invoices','pk'=>'id','fields'=>['customer_id'=>field('Customer','ref:customer_ids'),'invoice_date'=>field('Invoice date','date'),'due_date'=>field('Due date','date'),'amount'=>field('Amount','money'),'status'=>field('Status','select',true,50,['Paid','Unpaid','Cancelled'])],'columns'=>['id','invoice_date','due_date','amount','status']],
         'expenses' => ['title'=>'Expenses','singular'=>'expense','nav'=>'finance','icon'=>'wallet','description'=>'Keep an organized record of what your business spends.','table'=>'expenses','pk'=>'id','fields'=>['description'=>field('Description'),'date'=>field('Expense date','date'),'amount'=>field('Amount','money'),'category'=>field('Category','text',true,50)],'columns'=>['description','date','category','amount']],
         'ledger' => ['title'=>'Ledger','singular'=>'ledger entry','nav'=>'finance','icon'=>'wallet','description'=>'Record income and expenses in your business ledger.','table'=>'ledger_entries','pk'=>'id','fields'=>['description'=>field('Description'),'date'=>field('Entry date','date'),'amount'=>field('Amount','money'),'type'=>field('Entry type','select',true,50,['income','expense']),'category'=>field('Category','text',true,50)],'columns'=>['description','date','type','amount']],
@@ -347,6 +349,7 @@ function organization_tree(mysqli $db, int $companyId): array {
     ];
 }
 function module_config(string $key): array {
+    if ($key === 'pos') fail('Use the Point of sale workspace for checkout and sale management.', 404);
     $all = modules();
     if (!isset($all[$key])) fail('This workspace tool could not be found.',404);
     return $all[$key];
@@ -396,7 +399,7 @@ function validate_record(mysqli $db, int $companyId, array $module, array $poste
         if ($type === 'textarea') $value = rich_text_clean($value);
         if ($value === '') {
             if ($field['required']) $errors[$name] = 'Enter ' . strtolower($field['label']) . '.';
-            $values[$name] = in_array($type,['date','money'],true) || str_starts_with($type,'ref:') || ($type === 'email' && !$field['required']) ? null : '';
+            $values[$name] = in_array($type,['date','money','decimal_hours'],true) || str_starts_with($type,'ref:') || ($type === 'email' && !$field['required']) ? null : '';
             // Legacy NOT NULL columns represent an unassigned relationship with an empty value.
             if ($name === 'assignee' || ($module['table'] === 'contacts' && in_array($name,['lead_id','customer_id'],true))) $values[$name] = '';
             if ($name === 'manager_id' && $module['table'] === 'employees') $values[$name] = 0;
@@ -419,6 +422,7 @@ function validate_record(mysqli $db, int $companyId, array $module, array $poste
             if (!$date || $date->format('Y-m-d') !== $value || $value < '1900-01-01' || $value > '2200-12-31') $errors[$name] = 'Enter a valid date between 1900 and 2200.';
         }
         if ($type === 'money' && !preg_match('/^\d{1,8}(?:\.\d{1,2})?$/D',$value)) $errors[$name] = 'Enter a non-negative amount with up to two decimal places.';
+        if ($type === 'decimal_hours' && (!preg_match('/^\d{1,5}(?:\.\d{1,2})?$/D',$value) || (float)$value > 99999.99)) $errors[$name] = 'Enter a non-negative estimate up to 99,999.99 hours.';
         if ($type === 'integer' && (!ctype_digit($value) || strlen($value)>9)) $errors[$name] = 'Enter a whole number between 0 and 999,999,999.';
         if ($type === 'select' && !in_array($value,$field['options'],true)) $errors[$name] = 'Choose one of the available options.';
         if (str_starts_with($type,'ref:') && !array_key_exists($value,reference_options($db,$companyId,substr($type,4)))) $errors[$name] = 'Choose a record from your workspace.';
@@ -538,6 +542,14 @@ function save_record(mysqli $db, int $companyId, string $key, array $values, ?in
             if (!$current || !empty($current['archived_at'])) { $db->rollback(); fail('This record could not be found in your active workspace.',404); }
             if ($key === 'applications' && db_one($db,'SELECT application_id FROM application_submissions WHERE application_id = ? AND company_id = ?',[$id,$companyId])) { $db->rollback(); fail('Use the application review page to update a submitted application. Applicant details cannot be overwritten.',409); }
             if (!hash_equals(record_version($current),$version)) { $db->rollback(); fail('This record changed while you were editing it. Reload the page and review the latest version before saving.',409); }
+            if ($key === 'inventory' && array_key_exists('quantity',$values) && db_one($db,'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?', ['pos_sale_items'])) {
+                $reservedRows = db_rows($db,"SELECT si.quantity FROM pos_sale_items si JOIN pos_sales s ON s.id = si.sale_id AND s.company_id = si.company_id
+                    WHERE si.company_id = ? AND si.inventory_item_id = ? AND s.status = 'reserved' AND s.expires_at > UTC_TIMESTAMP()
+                    ORDER BY s.id FOR UPDATE",[$companyId,$id]);
+                $reservedQuantity = array_sum(array_map(fn($row)=>(int)$row['quantity'],$reservedRows));
+                if ((int)$values['quantity'] < $reservedQuantity) { $db->rollback(); fail('Inventory cannot be reduced below the quantity reserved by active POS sales.',409); }
+            }
+            if ($key === 'tasks' && (($values['status'] ?? '') === 'completed' || ($values['assignee'] ?? '') !== (string)($current['assignee'] ?? ''))) task_work_pause_task($db,$companyId,$id);
             if ($key === 'jobs' && $values['status'] === 'published' && !$current['published_at']) $values['published_at'] = gmdate('Y-m-d H:i:s');
             $assignments = implode(', ',array_map(fn($column)=>"`$column` = ?",array_keys($values)));
             db_run($db,"UPDATE `$table` SET $assignments WHERE `$pk` = ? AND company_id = ?",[...array_values($values),$id,$companyId]);
@@ -584,6 +596,7 @@ function record_cell_html(array $module, string $column, array $row, string $cur
     if (in_array($column,['status','stage','priority','severity','team_status'],true)) return '<span class="badge ' . e(stage_class($value)) . '">' . e($value) . '</span>';
     if ($type === 'textarea') return e(mb_strimwidth(preg_replace('/\s+/u',' ',rich_text_plain((string)$value)) ?? '',0,120,'…'));
     if ($type === 'money') return '<span class="money">' . ($currency !== '' ? '<small>' . e($currency) . '</small> ' : '') . e(number_format((float)$value,2)) . '</span>';
+    if ($type === 'decimal_hours') return e(number_format((float)$value,2)) . ' h';
     if ($type === 'date' || preg_match('/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/D',(string)$value)) {
         $time = strtotime((string)$value);
         if ($time === false) return e($value);

@@ -24,16 +24,16 @@ function notification_email_mode(mysqli $db, int $companyId, string $role, int $
     return in_array($mode,['instant','digest','off'],true) ? $mode : 'instant';
 }
 // Creates an alert once per dedupe key. Returns the new id, or null when it already existed.
-function notify(mysqli $db, int $companyId, string $role, int $id, string $kind, string $title, string $body = '', string $url = '', bool $formal = false, ?string $dedupe = null): ?int {
+function notify(mysqli $db, int $companyId, string $role, int $id, string $kind, string $title, string $body = '', string $url = '', bool $formal = false, ?string $dedupe = null, bool $deliverEmail = true): ?int {
     if (!in_array($role,['admin','employee','manager'],true) || $id <= 0) return null;
     if ($url !== '' && !str_starts_with($url,'/')) $url = '';
-    $statement = db_run($db,'INSERT IGNORE INTO notifications (company_id,recipient_role,recipient_id,kind,title,body,url,is_formal,dedupe_key) VALUES (?,?,?,?,?,?,?,?,?)',[
-        $companyId,$role,$id,mb_substr($kind,0,40),mb_substr($title,0,200),mb_substr($body,0,1000),mb_substr($url,0,255),$formal ? 1 : 0,$dedupe !== null ? mb_substr($dedupe,0,120) : null,
+    $statement = db_run($db,'INSERT IGNORE INTO notifications (company_id,recipient_role,recipient_id,kind,title,body,url,is_formal,dedupe_key,email_status) VALUES (?,?,?,?,?,?,?,?,?,?)',[
+        $companyId,$role,$id,mb_substr($kind,0,40),mb_substr($title,0,200),mb_substr($body,0,1000),mb_substr($url,0,255),$formal ? 1 : 0,$dedupe !== null ? mb_substr($dedupe,0,120) : null,$deliverEmail ? 'pending' : 'skipped',
     ]);
     if ($statement->affected_rows < 1) return null;
     $notificationId = (int)$statement->insert_id;
     // Web requests deliver straight away; the scheduler flushes the outbox for its own alerts.
-    if (PHP_SAPI !== 'cli') notification_deliver($db,$notificationId);
+    if ($deliverEmail && PHP_SAPI !== 'cli') notification_deliver($db,$notificationId);
     return $notificationId;
 }
 function notification_link(string $url): string {

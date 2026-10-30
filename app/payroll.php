@@ -47,6 +47,158 @@ function payroll_money(int $cents, string $currency = 'NGN'): string {
     return e($currency . ' ' . accounting_currency_amount($cents, ''));
 }
 
+function salary_vault_paystack_enabled(): bool {
+    return config('SALARY_VAULT_PAYSTACK_TOPUPS_ENABLED','false') === 'true' && paystack_ready();
+}
+
+function salary_vault_balance(mysqli $db, int $companyId): int {
+    db_run($db,"INSERT INTO salary_vaults (company_id) VALUES (?) ON DUPLICATE KEY UPDATE company_id = VALUES(company_id)",[$companyId]);
+    $vault = db_one($db,'SELECT balance_kobo FROM salary_vaults WHERE company_id = ?',[$companyId]);
+    if (!$vault) throw new RuntimeException('Salary Vault balance could not be loaded.');
+    return (int)$vault['balance_kobo'];
+}
+
+function salary_vault_append_locked(mysqli $db, int $companyId, string $reference, string $type, int $amountKobo, int $actorId, string $actorRole, ?int $fundingId = null, ?int $payrollItemId = null): bool {
+    if ($amountKobo === 0 || !in_array($type,['paystack_topup','manual_deposit','payroll_reservation','payroll_refund'],true)) {
+        throw new InvalidArgumentException('Invalid Salary Vault ledger entry.');
+    }
+    $existing = db_one($db,'SELECT entry_type, amount_kobo FROM salary_vault_entries WHERE company_id = ? AND entry_reference = ?',[$companyId,$reference]);
+    if ($existing) {
+        if ($existing['entry_type'] !== $type || (int)$existing['amount_kobo'] !== $amountKobo) {
+            throw new RuntimeException('A Salary Vault ledger reference was reused with different details.');
+        }
+        return false;
+    }
+    $vault = db_one($db,'SELECT balance_kobo FROM salary_vaults WHERE company_id = ? FOR UPDATE',[$companyId]);
+    if (!$vault) throw new RuntimeException('Salary Vault balance row is missing.');
+    $balance = (int)$vault['balance_kobo'];
+    if ($amountKobo < 0 && $balance < -$amountKobo) fail('The Salary Vault does not have enough cleared funds for this payment.',409);
+    if ($amountKobo > 0 && $balance > PHP_INT_MAX - $amountKobo) throw new OverflowException('Salary Vault balance exceeds the supported limit.');
+    db_run($db,'INSERT INTO salary_vault_entries (company_id,entry_reference,entry_type,amount_kobo,funding_id,payroll_item_id,actor_role,actor_id) VALUES (?,?,?,?,?,?,?,?)',[$companyId,$reference,$type,$amountKobo,$fundingId,$payrollItemId,$actorRole,$actorId]);
+    db_run($db,'UPDATE salary_vaults SET balance_kobo = ? WHERE company_id = ?',[$balance + $amountKobo,$companyId]);
+    return true;
+}
+
+function salary_vault_create_paystack_funding(mysqli $db, int $companyId, int $actorId, string $actorRole, string $email, mixed $rawAmount, ?callable $transport = null): array {
+    if (!salary_vault_paystack_enabled()) throw new PaymentUnavailable('Salary Vault Paystack top-ups are disabled or not configured.');
+    if (config('APP_ENV') === 'local' && config('PAYSTACK_MODE','test') !== 'test') throw new PaymentUnavailable('Live Paystack top-ups are blocked in local environments.');
+    $amount = payroll_amount_cents($rawAmount);
+    if ($amount === null || $amount < 10000) fail('Enter a top-up amount of at least NGN 100.00.',422);
+    if (!filter_var($email,FILTER_VALIDATE_EMAIL)) throw new InvalidArgumentException('A valid account email is required for Paystack checkout.');
+    $reference = 'ss-vault-' . bin2hex(random_bytes(20));
+    db_run($db,"INSERT INTO salary_vault_fundings (company_id,funding_method,amount_kobo,currency,status,reference,expected_email,provider_mode,created_by_role,created_by_id) VALUES (?,'paystack',?,'NGN','initializing',?,?,?, ?,?)",[$companyId,$amount,$reference,strtolower($email),config('PAYSTACK_MODE','test'),$actorRole,$actorId]);
+    $fundingId = (int)$db->insert_id;
+    try {
+        $callback = audience_url('business','/users/admin/payroll.php');
+        if (!str_starts_with($callback,'https://') && !str_starts_with($callback,'http://')) $callback = rtrim(config('APP_URL'),'/') . '/users/admin/payroll.php';
+        $callback .= '?funding=' . rawurlencode($reference);
+        $result = paystack_api('POST','/transaction/initialize',[
+            'email'=>strtolower($email),'amount'=>(string)$amount,'currency'=>'NGN','reference'=>$reference,
+            'callback_url'=>$callback,'metadata'=>['simplr_reference'=>$reference,'company_id'=>(string)$companyId,'purpose'=>'salary_vault_topup'],
+        ],$transport);
+        if (($result['reference'] ?? '') !== $reference || !paystack_checkout_url($result['authorization_url'] ?? null)) {
+            throw new PaymentUnavailable('Paystack returned an unexpected Salary Vault checkout response.');
+        }
+        db_run($db,"UPDATE salary_vault_fundings SET checkout_url = ?, status = 'awaiting_payment' WHERE id = ? AND company_id = ? AND status = 'initializing'",[$result['authorization_url'],$fundingId,$companyId]);
+    } catch (Throwable $error) {
+        db_run($db,"UPDATE salary_vault_fundings SET status = 'initialization_unknown' WHERE id = ? AND company_id = ? AND status = 'initializing'",[$fundingId,$companyId]);
+        if ($error instanceof PaymentUnavailable) throw $error;
+        throw new PaymentUnavailable('Paystack checkout could not be confirmed. Check the Salary Vault funding history before trying again.');
+    }
+    return db_one($db,'SELECT id,reference,checkout_url,amount_kobo,status FROM salary_vault_fundings WHERE id = ? AND company_id = ?',[$fundingId,$companyId])
+        ?? throw new RuntimeException('Salary Vault funding request could not be loaded.');
+}
+
+function salary_vault_submit_manual_funding(mysqli $db, int $companyId, int $actorId, string $actorRole, mixed $rawAmount, string $externalReference, string $note): int {
+    $amount = payroll_amount_cents($rawAmount);
+    $externalReference = trim($externalReference);
+    $note = trim($note);
+    if ($amount === null || $amount <= 0 || !preg_match('/^[A-Za-z0-9][A-Za-z0-9._\/-]{0,119}$/D',$externalReference) || mb_strlen($note) > 1000) {
+        fail('Enter a positive amount, a valid bank deposit reference, and a note of at most 1,000 characters.',422);
+    }
+    $reference = 'ss-vault-manual-' . bin2hex(random_bytes(16));
+    try {
+        db_run($db,"INSERT INTO salary_vault_fundings (company_id,funding_method,amount_kobo,currency,status,reference,external_reference,note,created_by_role,created_by_id) VALUES (?,'manual',?,'NGN','pending_approval',?,?,?,?,?)",[$companyId,$amount,$reference,$externalReference,$note,$actorRole,$actorId]);
+    } catch (mysqli_sql_exception $error) {
+        if ($error->getCode() === 1062) fail('That deposit reference has already been submitted for this workspace.',409);
+        throw $error;
+    }
+    $id = (int)$db->insert_id;
+    audit_event($db,$companyId,'salary_vault.deposit_submitted','salary_vault_funding',(string)$id,['amount'=>accounting_decimal_from_cents($amount),'external_reference'=>$externalReference],$actorRole,$actorId);
+    return $id;
+}
+
+function salary_vault_approve_manual_funding(mysqli $db, int $companyId, int $fundingId, int $actorId, string $actorRole): void {
+    if (!in_array($actorRole,['admin','employee'],true)) fail('Manual deposit approval is limited to the workspace owner or an employee with payroll edit access.',403);
+    $db->begin_transaction();
+    try {
+        $funding = db_one($db,"SELECT * FROM salary_vault_fundings WHERE id = ? AND company_id = ? AND funding_method = 'manual' AND status = 'pending_approval' FOR UPDATE",[$fundingId,$companyId]);
+        if (!$funding) { $db->rollback(); fail('This manual deposit is no longer awaiting approval.',409); }
+        if ($funding['created_by_role'] === $actorRole && (int)$funding['created_by_id'] === $actorId) {
+            $db->rollback();
+            fail('The person who submitted a deposit cannot approve it.',403);
+        }
+        salary_vault_balance($db,$companyId);
+        $entryReference = 'funding:' . $funding['reference'];
+        salary_vault_append_locked($db,$companyId,$entryReference,'manual_deposit',(int)$funding['amount_kobo'],$actorId,$actorRole,(int)$funding['id']);
+        db_run($db,"UPDATE salary_vault_fundings SET status = 'credited', approved_by_role = ?, approved_by_id = ?, approved_at = UTC_TIMESTAMP(), credited_at = UTC_TIMESTAMP() WHERE id = ? AND company_id = ? AND status = 'pending_approval'",[$actorRole,$actorId,$fundingId,$companyId]);
+        audit_event($db,$companyId,'salary_vault.deposit_approved','salary_vault_funding',(string)$fundingId,['amount'=>accounting_decimal_from_cents((int)$funding['amount_kobo']),'external_reference'=>$funding['external_reference']],$actorRole,$actorId);
+        $db->commit();
+    } catch (Throwable $error) { $db->rollback(); throw $error; }
+}
+
+function salary_vault_credit_verified_paystack(mysqli $db, array $funding, array $transaction): bool {
+    if (($transaction['reference'] ?? '') !== $funding['reference']
+        || ($transaction['status'] ?? '') !== 'success'
+        || !payroll_provider_amount_matches($transaction['amount'] ?? null,$transaction['currency'] ?? null,(int)$funding['amount_kobo'])
+        || strtolower((string)($transaction['customer']['email'] ?? '')) !== strtolower((string)$funding['expected_email'])) {
+        throw new PaymentMismatch('The verified Paystack transaction does not match this Salary Vault top-up.');
+    }
+    $providerId = is_int($transaction['id'] ?? null) || (is_string($transaction['id'] ?? null) && ctype_digit($transaction['id']))
+        ? (string)$transaction['id'] : '';
+    if ($providerId === '') throw new PaymentMismatch('Paystack did not return a valid transaction ID for this top-up.');
+    $db->begin_transaction();
+    try {
+        $locked = db_one($db,'SELECT * FROM salary_vault_fundings WHERE id = ? AND company_id = ? FOR UPDATE',[$funding['id'],$funding['company_id']]);
+        if (!$locked) { $db->rollback(); return false; }
+        if ($locked['status'] === 'credited') { $db->commit(); return true; }
+        if (!in_array($locked['status'],['awaiting_payment','initialization_unknown'],true)
+            || $locked['provider_mode'] !== config('PAYSTACK_MODE','test')) {
+            $db->rollback();
+            return false;
+        }
+        salary_vault_balance($db,(int)$locked['company_id']);
+        salary_vault_append_locked($db,(int)$locked['company_id'],'funding:' . $locked['reference'],'paystack_topup',(int)$locked['amount_kobo'],(int)$locked['created_by_id'],(string)$locked['created_by_role'],(int)$locked['id']);
+        db_run($db,"UPDATE salary_vault_fundings SET status = 'credited', provider_transaction_id = ?, credited_at = UTC_TIMESTAMP() WHERE id = ? AND company_id = ? AND status IN ('awaiting_payment','initialization_unknown')",[$providerId,$locked['id'],$locked['company_id']]);
+        audit_event($db,(int)$locked['company_id'],'salary_vault.paystack_topup_credited','salary_vault_funding',(string)$locked['id'],['amount'=>accounting_decimal_from_cents((int)$locked['amount_kobo']),'reference'=>$locked['reference']],'system',0);
+        $db->commit();
+        return true;
+    } catch (Throwable $error) { $db->rollback(); throw $error; }
+}
+
+function salary_vault_verify_paystack_funding(mysqli $db, string $reference, ?int $companyId = null, ?callable $transport = null): bool {
+    if (!paystack_ready()) throw new PaymentUnavailable('Paystack verification is unavailable in this environment.');
+    $params = [$reference];
+    $companyFilter = '';
+    if ($companyId !== null) { $companyFilter = ' AND company_id = ?'; $params[] = $companyId; }
+    $funding = db_one($db,"SELECT * FROM salary_vault_fundings WHERE reference = ? AND funding_method = 'paystack'$companyFilter",$params);
+    if (!$funding) return false;
+    if ($funding['status'] === 'credited') return true;
+    if ($funding['provider_mode'] !== config('PAYSTACK_MODE','test')) throw new PaymentUnavailable('This top-up belongs to a different Paystack environment.');
+    $verified = paystack_api('GET','/transaction/verify/' . rawurlencode($reference),[],$transport);
+    return salary_vault_credit_verified_paystack($db,$funding,$verified);
+}
+
+function salary_vault_refund_payroll_locked(mysqli $db, int $companyId, int $itemId, string $reference, string $event): void {
+    if (!in_array($event,['failed','reversed'],true)) return;
+    $reservation = db_one($db,"SELECT amount_kobo FROM salary_vault_entries WHERE company_id = ? AND entry_reference = ? AND entry_type = 'payroll_reservation'",[$companyId,'payroll:' . $reference]);
+    if (!$reservation) return;
+    $amount = -(int)$reservation['amount_kobo'];
+    if ($amount <= 0) throw new RuntimeException('Cannot refund an invalid payroll reservation.');
+    salary_vault_balance($db,$companyId);
+    salary_vault_append_locked($db,$companyId,'refund:' . $reference,'payroll_refund',$amount,0,'system',null,$itemId);
+}
+
 function payroll_staff(mysqli $db, int $companyId): array {
     $employees = db_rows($db,"SELECT id, 'employee' AS staff_role, TRIM(CONCAT(first_name, ' ', last_name)) AS staff_name, email AS staff_email FROM employees WHERE company_id = ? AND archived_at IS NULL ORDER BY first_name, last_name",[$companyId]);
     $managers = db_rows($db,"SELECT id, 'manager' AS staff_role, manager_name AS staff_name, manager_email AS staff_email FROM managers WHERE company_id = ? AND archived_at IS NULL AND status NOT IN ('suspended','disabled','inactive') ORDER BY manager_name",[$companyId]);
@@ -82,7 +234,7 @@ function payroll_profile_save(mysqli $db, int $companyId, int $userId, array $in
     audit_event($db,$companyId,'payroll.profile_updated',$role,(string)$staffId,['bank_account_changed'=>!$existing || decrypt_secret($existing['account_number_ciphertext']) !== $accountNumber]);
 }
 
-function payroll_create_run(mysqli $db, int $companyId, int $userId, string $start, string $end, string $payDate): int {
+function payroll_create_run(mysqli $db, int $companyId, int $userId, string $actorRole, string $start, string $end, string $payDate): int {
     if (!payroll_period_valid($start,$end,$payDate)) {
         fail('Enter one complete calendar month and a pay date on or after the period end.',422);
     }
@@ -96,7 +248,7 @@ function payroll_create_run(mysqli $db, int $companyId, int $userId, string $sta
     }
     $db->begin_transaction();
     try {
-        db_run($db,'INSERT INTO payroll_runs (company_id,period_start,period_end,pay_date,created_by) VALUES (?,?,?,?,?)',[$companyId,$start,$end,$payDate,$userId]);
+        db_run($db,'INSERT INTO payroll_runs (company_id,period_start,period_end,pay_date,created_by,created_by_role) VALUES (?,?,?,?,?,?)',[$companyId,$start,$end,$payDate,$userId,$actorRole]);
         $runId = (int)$db->insert_id;
         foreach ($people as $person) {
             $profile = $byPerson[$person['staff_role'] . ':' . $person['id']];
@@ -152,19 +304,42 @@ function payroll_cancel_draft(mysqli $db, int $companyId, int $runId): void {
     } catch (Throwable $error) { $db->rollback(); throw $error; }
 }
 
-function payroll_approve_run(mysqli $db, int $companyId, int $runId, int $userId): void {
+function payroll_validate_run_items(array $items): void {
+    if (!$items) fail('Only a non-empty draft run in your workspace can be submitted.',409);
+    foreach ($items as $item) {
+        try { $net = payroll_net_cents($item); }
+        catch (InvalidArgumentException $error) { fail('Payroll item ' . $item['staff_name'] . ' is invalid: ' . $error->getMessage(),422); }
+        if (payroll_amount_cents($item['net_pay']) !== $net) fail('Payroll totals changed. Review the draft before submission.',409);
+    }
+}
+
+function payroll_submit_run(mysqli $db, int $companyId, int $runId, int $userId, string $actorRole): void {
     $db->begin_transaction();
     try {
         $run = db_one($db,"SELECT id FROM payroll_runs WHERE id = ? AND company_id = ? AND status = 'draft' FOR UPDATE",[$runId,$companyId]);
         $items = db_rows($db,'SELECT * FROM payroll_items WHERE run_id = ? AND company_id = ? ORDER BY id FOR UPDATE',[$runId,$companyId]);
-        if (!$run || !$items) { $db->rollback(); fail('Only a non-empty draft run in your workspace can be approved.',409); }
-        foreach ($items as $item) {
-            try { payroll_net_cents($item); }
-            catch (InvalidArgumentException $error) { $db->rollback(); fail('Payroll item ' . $item['staff_name'] . ' is invalid: ' . $error->getMessage(),422); }
-            if (payroll_amount_cents($item['net_pay']) !== payroll_net_cents($item)) { $db->rollback(); fail('Payroll totals changed. Review the draft before approval.',409); }
+        if (!$run) { $db->rollback(); fail('Only a draft run in your workspace can be submitted.',409); }
+        payroll_validate_run_items($items);
+        db_run($db,"UPDATE payroll_runs SET status = 'pending_approval' WHERE id = ? AND company_id = ?",[$runId,$companyId]);
+        audit_event($db,$companyId,'payroll.run_submitted','payroll_run',(string)$runId,['staff_count'=>count($items)],$actorRole,$userId);
+        $db->commit();
+    } catch (Throwable $error) { $db->rollback(); throw $error; }
+}
+
+function payroll_approve_run(mysqli $db, int $companyId, int $runId, int $userId, string $actorRole): void {
+    if (!in_array($actorRole,['admin','employee'],true)) fail('Payroll approval is limited to the workspace owner or an employee with payroll edit access.',403);
+    $db->begin_transaction();
+    try {
+        $run = db_one($db,"SELECT id,created_by,created_by_role FROM payroll_runs WHERE id = ? AND company_id = ? AND status = 'pending_approval' FOR UPDATE",[$runId,$companyId]);
+        $items = db_rows($db,'SELECT * FROM payroll_items WHERE run_id = ? AND company_id = ? ORDER BY id FOR UPDATE',[$runId,$companyId]);
+        if (!$run) { $db->rollback(); fail('Only a submitted payroll run in your workspace can be approved.',409); }
+        if ((int)$run['created_by'] === $userId && $run['created_by_role'] === $actorRole) {
+            $db->rollback();
+            fail('The person who prepared this payroll run cannot approve it.',403);
         }
-        db_run($db,"UPDATE payroll_runs SET status = 'approved', approved_by = ?, approved_at = UTC_TIMESTAMP() WHERE id = ? AND company_id = ?",[$userId,$runId,$companyId]);
-        audit_event($db,$companyId,'payroll.run_approved','payroll_run',(string)$runId,['staff_count'=>count($items)]);
+        payroll_validate_run_items($items);
+        db_run($db,"UPDATE payroll_runs SET status = 'approved', approved_by = ?, approved_by_role = ?, approved_at = UTC_TIMESTAMP() WHERE id = ? AND company_id = ?",[$userId,$actorRole,$runId,$companyId]);
+        audit_event($db,$companyId,'payroll.run_approved','payroll_run',(string)$runId,['staff_count'=>count($items)],$actorRole,$userId);
         $db->commit();
     } catch (Throwable $error) { $db->rollback(); throw $error; }
 }
@@ -191,7 +366,7 @@ function payroll_paystack_enabled(): bool {
     return config('PAYROLL_PAYSTACK_TRANSFERS_ENABLED','false') === 'true' && paystack_ready();
 }
 
-function payroll_transfer(mysqli $db, int $companyId, int $runId, int $itemId, ?callable $transport = null): string {
+function payroll_transfer(mysqli $db, int $companyId, int $runId, int $itemId, int $actorId, string $actorRole, ?callable $transport = null): string {
     if (!payroll_paystack_enabled()) throw new PaymentUnavailable('Paystack payroll transfers are disabled or not configured. Enable PAYROLL_PAYSTACK_TRANSFERS_ENABLED only after verifying the workspace payout account.');
     if (config('APP_ENV') === 'local' && config('PAYSTACK_MODE','test') !== 'test') throw new PaymentUnavailable('Live Paystack transfers are blocked in local environments.');
     $db->begin_transaction();
@@ -227,9 +402,11 @@ function payroll_transfer(mysqli $db, int $companyId, int $runId, int $itemId, ?
     try {
         $locked = db_one($db,"SELECT payout_status FROM payroll_items WHERE id = ? AND run_id = ? AND company_id = ? FOR UPDATE",[$itemId,$runId,$companyId]);
         if (!$locked || !in_array($locked['payout_status'],['not_started','failed'],true)) { $db->rollback(); fail('This payout is already being processed. Do not retry it.',409); }
+        salary_vault_balance($db,$companyId);
+        salary_vault_append_locked($db,$companyId,'payroll:' . $reference,'payroll_reservation',-$net,$actorId,$actorRole,null,$itemId);
         db_run($db,"UPDATE payroll_items SET payout_status = 'processing', payout_reference = ? WHERE id = ? AND run_id = ? AND company_id = ?",[$reference,$itemId,$runId,$companyId]);
         db_run($db,"UPDATE payroll_runs SET status = 'processing' WHERE id = ? AND company_id = ? AND status = 'approved'",[$runId,$companyId]);
-        audit_event($db,$companyId,'payroll.transfer_requested','payroll_item',(string)$itemId,['reference'=>$reference,'amount'=>accounting_decimal_from_cents($net),'currency'=>'NGN']);
+        audit_event($db,$companyId,'payroll.transfer_requested','payroll_item',(string)$itemId,['reference'=>$reference,'amount'=>accounting_decimal_from_cents($net),'currency'=>'NGN'],$actorRole,$actorId);
         $db->commit();
     } catch (Throwable $error) { $db->rollback(); throw $error; }
     try {
@@ -250,6 +427,19 @@ function payroll_transfer(mysqli $db, int $companyId, int $runId, int $itemId, ?
             payroll_refresh_run_status($db,$companyId,$itemId);
             audit_event($db,$companyId,'payroll.transfer_initiated','payroll_item',(string)$itemId,['reference'=>$reference,'provider_status'=>'success']);
             return 'paid';
+        }
+        if (in_array($status,['failed','reversed'],true)) {
+            $db->begin_transaction();
+            try {
+                $current = db_one($db,'SELECT payout_status FROM payroll_items WHERE id = ? AND run_id = ? AND company_id = ? AND payout_reference = ? FOR UPDATE',[$itemId,$runId,$companyId,$reference]);
+                if (!$current) { $db->rollback(); throw new PaymentUnavailable('The transfer status could not be saved for reconciliation.'); }
+                db_run($db,'UPDATE payroll_items SET payout_status = ?, paid_at = NULL WHERE id = ? AND run_id = ? AND company_id = ? AND payout_reference = ?',[$status,$itemId,$runId,$companyId,$reference]);
+                salary_vault_refund_payroll_locked($db,$companyId,$itemId,$reference,$status);
+                payroll_refresh_run_status($db,$companyId,$itemId);
+                audit_event($db,$companyId,'payroll.transfer_initiated','payroll_item',(string)$itemId,['reference'=>$reference,'provider_status'=>$status]);
+                $db->commit();
+                return $status;
+            } catch (Throwable $error) { $db->rollback(); throw $error; }
         }
         db_run($db,"UPDATE payroll_items SET payout_status = 'pending' WHERE id = ? AND run_id = ? AND company_id = ? AND payout_reference = ?",[$itemId,$runId,$companyId,$reference]);
         return 'pending';
@@ -290,6 +480,19 @@ function payroll_finalize_transfer(mysqli $db, int $companyId, int $runId, int $
             audit_event($db,$companyId,'payroll.transfer_authorized','payroll_item',(string)$itemId,['reference'=>$item['payout_reference']]);
             return;
         }
+        if (in_array($status,['failed','reversed'],true)) {
+            $db->begin_transaction();
+            try {
+                $current = db_one($db,"SELECT payout_status FROM payroll_items WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'authorizing' FOR UPDATE",[$itemId,$runId,$companyId]);
+                if (!$current) { $db->rollback(); throw new PaymentUnavailable('The transfer status changed during authorization. Reconcile it before proceeding.'); }
+                db_run($db,"UPDATE payroll_items SET payout_status = ?, provider_transfer_code_ciphertext = NULL WHERE id = ? AND run_id = ? AND company_id = ?",[$status,$itemId,$runId,$companyId]);
+                salary_vault_refund_payroll_locked($db,$companyId,$itemId,(string)$item['payout_reference'],$status);
+                payroll_refresh_run_status($db,$companyId,$itemId);
+                audit_event($db,$companyId,'payroll.transfer_authorized','payroll_item',(string)$itemId,['reference'=>$item['payout_reference'],'provider_status'=>$status]);
+                $db->commit();
+                return;
+            } catch (Throwable $error) { $db->rollback(); throw $error; }
+        }
         db_run($db,"UPDATE payroll_items SET payout_status = 'pending', provider_transfer_code_ciphertext = NULL WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'authorizing'",[$itemId,$runId,$companyId]);
     } catch (Throwable $error) {
         db_run($db,"UPDATE payroll_items SET payout_status = 'unknown', provider_transfer_code_ciphertext = NULL WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'authorizing'",[$itemId,$runId,$companyId]);
@@ -324,6 +527,7 @@ function payroll_reconcile_transfer(mysqli $db, int $companyId, int $runId, int 
             fail('This transfer status changed during reconciliation. Reload the payroll run.',409);
         }
         db_run($db,'UPDATE payroll_items SET payout_status = ?, paid_at = ?, provider_transfer_code_ciphertext = NULL WHERE id = ? AND run_id = ? AND company_id = ?',[$next,$paidAt,$itemId,$runId,$companyId]);
+        salary_vault_refund_payroll_locked($db,$companyId,$itemId,(string)$item['payout_reference'],$status);
         payroll_refresh_run_status($db,$companyId,$itemId);
         audit_event($db,$companyId,'payroll.transfer_reconciled','payroll_item',(string)$itemId,['reference'=>$item['payout_reference'],'provider_status'=>$status]);
         $db->commit();
@@ -352,8 +556,10 @@ function payroll_transfer_webhook(mysqli $db, string $event, array $data): bool 
             $db->commit();
             return false;
         }
-        if ($item['payout_status'] !== 'reversed' && !($item['payout_status'] === 'paid' && $status !== 'reversed')) {
+        $acceptEvent = $item['payout_status'] !== 'reversed' && !($item['payout_status'] === 'paid' && $status !== 'reversed');
+        if ($acceptEvent) {
             db_run($db,'UPDATE payroll_items SET payout_status = ?, paid_at = ? WHERE id = ? AND payout_reference = ?',[$status,$paidAt,$item['id'],$reference]);
+            salary_vault_refund_payroll_locked($db,(int)$item['company_id'],(int)$item['id'],$reference,$status);
             audit_event($db,(int)$item['company_id'],'payroll.transfer_webhook','payroll_item',(string)$item['id'],['event'=>$event,'reference'=>$reference],'system',0);
         }
         payroll_refresh_run_status($db,(int)$item['company_id'],(int)$item['id']);

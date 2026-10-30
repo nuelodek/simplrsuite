@@ -14,6 +14,16 @@ if (in_array(($event['event'] ?? ''),['transfer.success','transfer.failed','tran
 }
 if (($event['event'] ?? '') !== 'charge.success') json_response(['ok'=>true,'result'=>'ignored']);
 $reference = $event['data']['reference'] ?? null;
+if (is_string($reference) && preg_match('/^ss-vault-[a-f0-9]{40}$/D',$reference)) {
+    try {
+        $credited = salary_vault_verify_paystack_funding(database(),$reference);
+        json_response(['ok'=>true,'result'=>$credited ? 'credited' : 'ignored']);
+    } catch (PaymentMismatch $error) {
+        json_response(['ok'=>true,'result'=>'review_required']);
+    } catch (PaymentUnavailable $error) {
+        json_response(['ok'=>false,'error'=>'Top-up verification is temporarily unavailable.'],503);
+    }
+}
 if (!is_string($reference) || !preg_match('/^ss-[a-f0-9]{40}$/D',$reference)) json_response(['ok'=>true,'result'=>'ignored']);
 $db = database(); $order = db_one($db,'SELECT * FROM billing_orders WHERE reference = ?',[$reference]);
 if (!$order || $order['provider'] !== 'paystack') json_response(['ok'=>true,'result'=>'ignored']);

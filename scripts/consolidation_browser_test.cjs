@@ -66,6 +66,14 @@ async function localOnly(context) {
     await page.waitForURL('**/users/admin/newdashboard.php');
     check(await page.getByRole('heading',{name:'Business overview'}).isVisible(), 'Business dashboard still works after consolidation');
     check(await page.getByRole('link',{name:/Accounting/}).isVisible(), 'Business dashboard links to accounting');
+    await page.goto(base + '/users/admin/pos.php');
+    check(await page.getByRole('heading',{name:'Point of sale'}).isVisible(), 'Retail point of sale opens for the workspace owner');
+    check(await page.getByRole('heading',{name:'Products'}).isVisible(), 'POS product catalog renders');
+    check(await page.locator('[data-pos-products] .pos-product').count() > 0, 'POS reads available products from shared inventory');
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'POS fits the desktop viewport');
+    await page.setViewportSize({width:390,height:844});
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'POS fits a mobile checkout viewport');
+    await page.setViewportSize({width:1280,height:900});
     await page.goto(base + '/users/admin/accounting.php');
     check(await page.getByRole('heading',{name:'Accounting',exact:true}).isVisible(), 'Accounting page opens for the signed-in business owner');
     await page.getByRole('button',{name:'Create standard chart'}).click();

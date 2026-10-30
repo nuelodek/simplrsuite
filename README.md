@@ -55,7 +55,8 @@ database. No JavaScript build step is needed.
    `WORKDAY_CLIENT_ID`, `WORKDAY_CLIENT_SECRET`, `WORKDAY_SCOPES`;
    `ZOHO_BOOKS_CLIENT_ID`, `ZOHO_BOOKS_CLIENT_SECRET`, `ZOHO_BOOKS_REGION`;
    `PAYSTACK_ENABLED`, `PAYSTACK_MODE`, `PAYSTACK_SECRET_KEY`,
-   `PAYROLL_PAYSTACK_TRANSFERS_ENABLED`, `FLUTTERWAVE_ENABLED`,
+   `PAYROLL_PAYSTACK_TRANSFERS_ENABLED`, `SALARY_VAULT_PAYSTACK_TOPUPS_ENABLED`,
+   `FLUTTERWAVE_ENABLED`,
    `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_HASH`, `BILLING_USD_RATE`,
    `BILLING_ENFORCE`; the `LINKEDIN_*`, `FACEBOOK_*` and `INSTAGRAM_*` job-posting
    keys; and the `PRIVACY_*` business identity. Leave unused settings out (or
@@ -114,6 +115,15 @@ serving the repository directly without its deny rules can expose private files.
   with the arrow keys. A move revalidates the whole record and uses the same
   edit grant, CSRF and stale-version checks as the edit form
   (`POST /api/records.php?module=…` with `action=move`).
+- Point of sale for retail checkout, linked to shared Inventory and Customers.
+  Cashiers open a register shift, reserve stock for 20 minutes, record cash,
+  card, or external payments without processing them, and complete or cancel
+  sales. Refunds, optional full-sale restocking, receipt printing, daily totals,
+  and shift cash reconciliation are included. Apply migration
+  `035_point_of_sale.sql` before opening `/users/admin/pos.php`. Configure a
+  supported workspace currency in Settings and add at least one register.
+  POS access follows the Sales & CRM toolkit grant; card payments and refunds
+  must be processed outside Simplr.
 - Rich text for long fields (descriptions, agendas, job descriptions, notes): a
   toolbar editor that degrades to a plain textarea. The server stores a small
   allowlisted HTML subset rebuilt from scratch (`app/richtext.php`); older plain
@@ -164,7 +174,14 @@ serving the repository directly without its deny rules can expose private files.
   decline, and employers can cancel scheduled interviews. These updates appear in
   both accounts; the app does not send interview emails. Withdrawal closes review
   and revokes employer resume downloads; submitted records and previously
-  downloaded copies remain. Direct messaging is unavailable.
+  downloaded copies remain. Company-scoped direct and group messaging is
+  available at `/users/admin/messages.php`, with teammate and workspace-record
+  `@` references, mention notifications, and selected-message sharing. Staff
+  access follows the Messages toolkit grant; refresh-based live updates do not
+  require a separate WebSocket service. Apply migration
+  `036_workspace_messaging.sql` before opening Messages. Attachments and push
+  notifications are not included. Historical messages without reliable company
+  and participant ownership are not imported.
   Historical talent records are preserved and
   are not automatically published or imported into the new profile editor.
 - Internal record API at `/api/records.php?module=projects` (and other allowlisted
@@ -227,17 +244,24 @@ payroll deductions, post accounting entries, or impose a penalty automatically.
 Configure the default response window and warning expiry under Workspace
 settings.
 
-Payroll supports company-scoped NGN compensation profiles, draft and approved
-monthly pay runs, employee payslips, editable per-run statutory deduction
-amounts, bank-transfer CSV exports with manual payment-reference tracking, and
-individual Paystack transfers after the owner enables and verifies the payout
-configuration. Bank account numbers are
-encrypted at rest. Pay run approval locks compensation lines; transfer requests
-are individually confirmed and ambiguous provider outcomes are locked against
-automatic retries until reconciled. Payroll does not calculate or file Nigerian
-tax, pension, or housing-fund obligations. Have a qualified payroll professional
-verify each amount before approval. HR penalties are never imported as payroll
-deductions.
+Payroll supports company-scoped NGN compensation profiles, monthly pay runs,
+employee payslips, editable per-run statutory deduction amounts, and
+bank-transfer CSV exports. A payroll editor submits a run for approval by the
+workspace owner or a distinct employee with payroll edit access; preparers cannot
+self-approve. The Salary Vault tracks a cleared, tenant-scoped NGN allocation in
+an auditable ledger. Paystack top-ups are disabled unless
+`SALARY_VAULT_PAYSTACK_TOPUPS_ENABLED=true` and are credited only after
+server-side transaction verification. External bank deposits require a distinct
+owner/employee reconciliation before credit. Paystack's provider balance is
+shared operationally across workspaces; the Vault is an allocation ledger, not a
+segregated bank account or custodial wallet. Payroll transfers require sufficient
+cleared Vault funds, reserve them before provider submission, and return funds
+only after Paystack confirms failure or reversal. Uncertain outcomes remain
+reserved until reconciled. Transfers remain disabled unless
+`PAYROLL_PAYSTACK_TRANSFERS_ENABLED=true`. Bank account numbers are encrypted at
+rest. Payroll does not calculate or file Nigerian tax, pension, or housing-fund
+obligations. Have a qualified payroll professional verify each amount before
+approval. HR penalties are never imported as payroll deductions.
 
 Billing offers **Paystack for NGN and Flutterwave for USD**, following the original
 `simplr24` currency/provider choice. The server owns prices, conversion, orders and
@@ -257,10 +281,10 @@ calls are part of local verification. Sandbox checkout also remains disabled
 until fresh Paystack and Flutterwave server-side test credentials are configured;
 the old public key and exposed legacy secret are not reused.
 
-Amounts in existing finance tables are recorded amounts; payroll transfers are
-available only through the separately configured, explicit Paystack workflow. This
-build does not calculate statutory payroll, issue compliant tax invoices, or fetch
-live banking balances. The invoice area is an invoice register. The Accounting
+Amounts in existing finance tables are recorded amounts; Salary Vault allocations
+are separate from accounting and bank balances. This build does not calculate
+statutory payroll, issue compliant tax invoices, or fetch live banking balances.
+The invoice area is an invoice register. The Accounting
 page provides a separate company-scoped chart of accounts, balanced journal entries,
 an income statement, a balance sheet and three management ratios. Existing ledger
 records are not imported; enter opening balances as a balanced journal entry. These

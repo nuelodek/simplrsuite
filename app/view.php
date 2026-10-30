@@ -70,9 +70,9 @@ function command_palette_items(string $role, array $nav, array $grants): array {
     $urls = array_column($items, 'url');
     $tools = $role === 'admin' ? modules() : array_intersect_key(assignable_modules(), $grants);
     foreach ($tools as $key=>$module) {
-        $url = $key === 'payroll' && $role !== 'admin' ? '/users/employees/payroll.php' : ($key === 'payroll' ? '/users/admin/payroll.php' : '/users/admin/workspace.php?module=' . $key);
+        $url = $key === 'messages' ? '/users/admin/messages.php' : ($key === 'pos' ? '/users/admin/pos.php' : ($key === 'payroll' && $role !== 'admin' ? '/users/employees/payroll.php' : ($key === 'payroll' ? '/users/admin/payroll.php' : '/users/admin/workspace.php?module=' . $key)));
         if (!in_array($url, $urls, true)) $items[] = ['group'=>'Go to','label'=>$module['title'],'url'=>$url,'icon'=>$module['icon']];
-        if ($key !== 'payroll' && ($role === 'admin' || $grants[$key] === 'edit')) $items[] = ['group'=>'Create','key'=>$key,'label'=>'New ' . $module['singular'],'url'=>$url . '&action=new','icon'=>$module['icon']];
+        if (!in_array($key,['messages','payroll','pos'],true) && ($role === 'admin' || $grants[$key] === 'edit')) $items[] = ['group'=>'Create','key'=>$key,'label'=>'New ' . $module['singular'],'url'=>$url . '&action=new','icon'=>$module['icon']];
     }
     return $items;
 }
@@ -105,6 +105,7 @@ function suite_start(string $title, string $active, array $user): void {
         ['benefits','Benefits','shield','/users/admin/workspace.php?module=benefits','People'],
         ['recruiting','Recruiting','briefcase','/users/admin/talent-directory.php','People'],
         ['sales','Sales & CRM','target','/users/admin/workspace.php?module=leads','Business'],
+        ['pos','Point of sale','card','/users/admin/pos.php','Business'],
         ['finance','Finance','wallet','/users/admin/workspace.php?module=expenses','Business'],
         ['accounting','Accounting','book','/users/admin/accounting.php','Business'],
         ['payroll','Payroll','wallet','/users/admin/payroll.php','Business'],
@@ -121,8 +122,14 @@ function suite_start(string $title, string $active, array $user): void {
     if (in_array($role, ['employee','manager'], true)) {
         $nav = [['overview','My workspace','grid','/users/employees/workspace.php',''], ['tasks','My tasks','task','/users/employees/workspace.php#tasks',''], ['queries','My queries','flag','/users/admin/queries.php',''], ['alerts','Alerts','bell','/users/admin/notifications.php',''], ['modules','My tools','box','/users/admin/modules.php',''], ['files','Files','file','/users/admin/files.php',''], ['reports','Reports','chart','/users/admin/reports.php',''], ['help','Workspace help','help','/users/help.php',''], ['profile','My profile','user','/users/employees/workspace.php#profile','']];
         foreach (db_rows(database(),'SELECT module_key, access_level FROM staff_tool_access WHERE company_id = ? AND staff_role = ? AND staff_id = ? AND access_level IN (\'view\',\'edit\')',[(int)$user['company_id'],$role,(int)$user['id']]) as $grant) $grants[$grant['module_key']] = $grant['access_level'];
+        if (isset($grants['pos'])) $nav[] = ['pos','Point of sale','card','/users/admin/pos.php',''];
         if (isset($grants['jobs'])) $nav[] = ['recruiting','Recruiting','briefcase','/users/admin/talent-directory.php',''];
-        if (isset($grants['payroll'])) $nav[] = ['payroll','My payslips','wallet','/users/employees/payroll.php',''];
+        if (isset($grants['attendance'])) $nav[] = ['attendance','Attendance','clock','/users/admin/attendance.php',''];
+        if (isset($grants['messages'])) $nav[] = ['messages','Messages','mail','/users/admin/messages.php',''];
+        if (isset($grants['payroll'])) {
+            $nav[] = ['payroll','My payslips','wallet','/users/employees/payroll.php',''];
+            if ($grants['payroll'] === 'edit') $nav[] = ['payroll-management','Payroll management','wallet','/users/admin/payroll.php',''];
+        }
     }
     if ($role === 'talent') {
         $nav = [['profile','My profile','user','/users/talents/talentpool.php',''], ['jobs','Browse roles','briefcase','/jobs/',''], ['applications','My applications','task','/users/talents/applications.php',''], ['opportunities','Invitations & offers','mail','/users/talents/opportunities.php',''], ['security','Account security','shield','/users/talents/resetpassword.php','']];
@@ -143,7 +150,7 @@ function suite_start(string $title, string $active, array $user): void {
         default => [
             ['Overview','Start here for a snapshot of projects, open tasks, key counts, and your setup checklist.',['overview']],
             ['Projects, tasks, and people','Use these pages to organize work, track tasks, keep files, and manage departments and team records.',['projects','tasks','files','people']],
-            ['Business tools','Open the relevant area for customer relationships, finances, recruiting, or browse all available tools.',['sales','finance','recruiting','modules']],
+            ['Business tools','Open the relevant area for customer relationships, retail checkout, finances, recruiting, or browse all available tools.',['sales','pos','finance','recruiting','modules']],
             ['Accounting','Post balanced journal entries and review financial statements and ratios.',['accounting']],
             ['Planning and insight','Use Calendar to review events, Reports to summarize activity, and Activity to review workspace changes.',['calendar','reports','activity']],
             ['Workspace controls','Manage staff access, settings, billing, and integrations, or ask for help.',['access','settings','billing','integrations','help']],
