@@ -22,7 +22,7 @@ function payroll_period_valid(string $start, string $end, string $payDate): bool
 function payroll_provider_amount_matches(mixed $providerAmount, mixed $currency, int $netCents): bool {
     return (is_int($providerAmount) || is_string($providerAmount))
         && ctype_digit((string)$providerAmount)
-        && (int)$providerAmount === $netCents * 100
+        && (int)$providerAmount === $netCents
         && $currency === 'NGN';
 }
 
@@ -234,7 +234,7 @@ function payroll_transfer(mysqli $db, int $companyId, int $runId, int $itemId, ?
     } catch (Throwable $error) { $db->rollback(); throw $error; }
     try {
         $result = paystack_api('POST','/transfer',[
-            'source'=>'balance','amount'=>(string)($net * 100),'recipient'=>$recipient,
+            'source'=>'balance','amount'=>(string)$net,'recipient'=>$recipient,
             'reference'=>$reference,'reason'=>'Payroll ' . $runId . ' · ' . $item['staff_name'],'currency'=>'NGN',
         ],$transport);
         $status = (string)($result['status'] ?? '');
@@ -264,7 +264,7 @@ function payroll_finalize_transfer(mysqli $db, int $companyId, int $runId, int $
     if (!payroll_paystack_enabled() || !preg_match('/^[0-9]{6,8}$/D',$otp)) fail('Enter the valid one-time transfer authorization code.',422);
     $db->begin_transaction();
     try {
-        $item = db_one($db,"SELECT payout_reference, provider_transfer_code_ciphertext FROM payroll_items WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'otp_required' FOR UPDATE",[$itemId,$runId,$companyId]);
+        $item = db_one($db,"SELECT payout_reference, net_pay, paystack_recipient_code, provider_transfer_code_ciphertext FROM payroll_items WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'otp_required' FOR UPDATE",[$itemId,$runId,$companyId]);
         if (!$item || !$item['provider_transfer_code_ciphertext']) { $db->rollback(); fail('This payroll transfer is not awaiting authorization.',409); }
         $transferCode = decrypt_secret($item['provider_transfer_code_ciphertext']);
         db_run($db,"UPDATE payroll_items SET payout_status = 'authorizing' WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'otp_required'",[$itemId,$runId,$companyId]);
@@ -273,6 +273,17 @@ function payroll_finalize_transfer(mysqli $db, int $companyId, int $runId, int $
     try {
         $result = paystack_api('POST','/transfer/finalize_transfer',['transfer_code'=>$transferCode,'otp'=>$otp]);
         $status = (string)($result['status'] ?? '');
+        $net = payroll_amount_cents($item['net_pay']);
+        $recipientData = is_array($result['recipient'] ?? null) ? $result['recipient'] : [];
+        $recipient = $result['recipient_code'] ?? ($recipientData['recipient_code'] ?? null);
+        $verified = ($result['reference'] ?? '') === $item['payout_reference']
+            && $net !== null
+            && payroll_provider_amount_matches($result['amount'] ?? null,$result['currency'] ?? null,$net)
+            && (!is_string($recipient) || $recipient === '' || hash_equals((string)$item['paystack_recipient_code'],$recipient));
+        if (!$verified) {
+            db_run($db,"UPDATE payroll_items SET payout_status = 'unknown', provider_transfer_code_ciphertext = NULL WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'authorizing'",[$itemId,$runId,$companyId]);
+            throw new PaymentUnavailable('Paystack returned a transfer that did not match the approved payroll amount, currency, reference, or recipient. Reconcile before taking further action.');
+        }
         if ($status === 'success') {
             db_run($db,"UPDATE payroll_items SET payout_status = 'paid', paid_at = UTC_TIMESTAMP(), provider_transfer_code_ciphertext = NULL WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'authorizing'",[$itemId,$runId,$companyId]);
             payroll_refresh_run_status($db,$companyId,$itemId);
@@ -284,6 +295,40 @@ function payroll_finalize_transfer(mysqli $db, int $companyId, int $runId, int $
         db_run($db,"UPDATE payroll_items SET payout_status = 'unknown', provider_transfer_code_ciphertext = NULL WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status = 'authorizing'",[$itemId,$runId,$companyId]);
         throw new PaymentUnavailable('Paystack could not confirm the authorization. This payout is locked against retries; reconcile its reference before taking further action.');
     }
+}
+
+function payroll_reconcile_transfer(mysqli $db, int $companyId, int $runId, int $itemId): string {
+    if (!payroll_paystack_enabled()) throw new PaymentUnavailable('Paystack transfers are disabled or not configured.');
+    $item = db_one($db,"SELECT payout_reference, payout_status, net_pay, paystack_recipient_code FROM payroll_items WHERE id = ? AND run_id = ? AND company_id = ? AND payout_status IN ('unknown','pending','processing')",[$itemId,$runId,$companyId]);
+    if (!$item || !$item['payout_reference']) fail('This payroll item has no transfer reference to reconcile.',409);
+    $result = paystack_api('GET','/transfer/verify/' . rawurlencode((string)$item['payout_reference']));
+    $net = payroll_amount_cents($item['net_pay']);
+    $recipientData = is_array($result['recipient'] ?? null) ? $result['recipient'] : [];
+    $recipient = $result['recipient_code'] ?? ($recipientData['recipient_code'] ?? null);
+    if (($result['reference'] ?? '') !== $item['payout_reference'] || $net === null
+        || !payroll_provider_amount_matches($result['amount'] ?? null,$result['currency'] ?? null,$net)
+        || (is_string($recipient) && $recipient !== '' && !hash_equals((string)$item['paystack_recipient_code'],$recipient))) {
+        throw new PaymentUnavailable('Paystack returned a transfer that does not match this payroll item. It remains locked for manual review.');
+    }
+    $status = (string)($result['status'] ?? '');
+    if (!in_array($status,['success','failed','reversed','pending'],true)) {
+        throw new PaymentUnavailable('Paystack has not returned a final or reconcilable transfer status.');
+    }
+    $next = $status === 'success' ? 'paid' : $status;
+    $paidAt = $next === 'paid' ? gmdate('Y-m-d H:i:s') : null;
+    $db->begin_transaction();
+    try {
+        $locked = db_one($db,"SELECT payout_status FROM payroll_items WHERE id = ? AND run_id = ? AND company_id = ? AND payout_reference = ? FOR UPDATE",[$itemId,$runId,$companyId,$item['payout_reference']]);
+        if (!$locked || !in_array($locked['payout_status'],['unknown','pending','processing'],true)) {
+            $db->rollback();
+            fail('This transfer status changed during reconciliation. Reload the payroll run.',409);
+        }
+        db_run($db,'UPDATE payroll_items SET payout_status = ?, paid_at = ?, provider_transfer_code_ciphertext = NULL WHERE id = ? AND run_id = ? AND company_id = ?',[$next,$paidAt,$itemId,$runId,$companyId]);
+        payroll_refresh_run_status($db,$companyId,$itemId);
+        audit_event($db,$companyId,'payroll.transfer_reconciled','payroll_item',(string)$itemId,['reference'=>$item['payout_reference'],'provider_status'=>$status]);
+        $db->commit();
+        return $next;
+    } catch (Throwable $error) { $db->rollback(); throw $error; }
 }
 
 function payroll_transfer_webhook(mysqli $db, string $event, array $data): bool {

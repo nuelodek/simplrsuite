@@ -85,6 +85,8 @@ return [
     '/users/admin/login.php' => 'users/admin/login.php',
     '/users/admin/login_process.php' => 'users/admin/login_process.php',
     '/users/admin/logout.php' => 'users/admin/logout.php',
+    '/users/admin/messages.php' => 'users/admin/messages.php',
+    '/users/admin/attendance.php' => 'users/admin/attendance.php',
     '/users/admin/meeting.php' => 'users/admin/meeting.php',
     '/users/admin/modules.php' => 'users/admin/modules.php',
     '/users/admin/notifications.php' => 'users/admin/notifications.php',

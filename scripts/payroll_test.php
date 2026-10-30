@@ -26,8 +26,9 @@ payroll_expect(payroll_amount_cents('1e5') === null,'Scientific-notation payroll
 payroll_expect(payroll_period_valid('2024-02-01','2024-02-29','2024-03-01'),'Leap-year monthly payroll period is valid.');
 payroll_expect(!payroll_period_valid('2024-02-02','2024-02-29','2024-03-01'),'Partial payroll periods are rejected.');
 payroll_expect(!payroll_period_valid('2024-02-01','2024-02-29','2024-02-28'),'Pay date cannot precede the period end.');
-payroll_expect(payroll_provider_amount_matches('12000000','NGN',120000),'Provider transfer amounts are verified in kobo.');
-payroll_expect(!payroll_provider_amount_matches('12000000','USD',120000),'Payroll transfer currency must be NGN.');
+payroll_expect(payroll_provider_amount_matches('120000','NGN',120000),'NGN transfer amount uses exact kobo units.');
+payroll_expect(!payroll_provider_amount_matches('12000000','NGN',120000),'A hundredfold transfer amount is rejected.');
+payroll_expect(!payroll_provider_amount_matches('120000','USD',120000),'Payroll transfer currency must be NGN.');
 payroll_expect(isset(assignable_modules()['payroll']),'Payroll can be assigned through the existing staff-access controls.');
 $routes = require __DIR__ . '/../app/routes.php';
 payroll_expect(($routes['/users/admin/payroll.php'] ?? '') === 'users/admin/payroll.php','Owner payroll page is routable.');

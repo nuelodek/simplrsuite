@@ -23,11 +23,11 @@ first column.
 | Job posting to LinkedIn, Facebook, Instagram | Limited | Works only after the Simplr team configures each platform's keys; otherwise shown as "Not connected". | Self-service connection. |
 | GitHub | Available | One-click connect (several accounts), issues, PRs and commits on projects, issue-to-task sync with assignee matching, scheduled sync. | Writing back to GitHub. |
 | Accounting and people-system connections | Limited | QuickBooks Online, Xero and Zoho Books authorize a provider account and verify the selected company/organization; Workday authorizes a configured tenant. Tokens are encrypted at rest; accounting connections support verification and disconnect, while Workday supports disconnect. | No accounting records are imported, exported or modified; Workday worker data is not read. Provider credentials, callback registration and production access are not verified locally. See the [connection setup guides](quickbooks-integration.md). |
-| Other future integrations (Slack, Google, ADP and others in the catalog) | **Not built** | Listed as future requests. | No working connector. |
+| Other future integrations (Slack, Google, ADP and others in the catalog) | **Not built** | Planned catalog entries show disabled Connect buttons. | No working connector; the buttons do not connect accounts. |
 | Files and attachments | Available | Private uploads (PDF, images, CSV, macro-free Office files), Files library, per-tool permissions, quotas. | Antivirus scanning (owner decision pending). |
 | Search, reports, CSV export | Available | Workspace search limited to the tools a person can open; CSV exports with spreadsheet-formula protection. | — |
-| Direct messaging | **Not built** | — | Legacy chat pages are blocked. |
-| Attendance, leave, benefits | **Not built** | — | No clock-in, leave balances or benefits administration. |
+| Direct messaging | Limited | Staff message records with sender/recipient history, delivery status, and workspace threading. | Live real-time chat, rich media, attachments or push notifications are not part of the launch scope. |
+| Attendance, leave, benefits | Limited | Attendance records, leave requests, and assigned benefits are tracked in the workspace; they connect to the modern employee directory and people UI. | No clock-in, leave balances, automated approval rules or benefits administration beyond assignment records. |
 | Subscriptions | Limited | Paystack (NGN) and Flutterwave (USD) checkout in test mode; entitlements per tool. | Live mode, automatic renewals, refunds and disputes are not enabled; billing enforcement is off until the owner signs off. |
 | Support and help | Limited | Private help requests from staff to the workspace owner. | A Simplr support desk or service-level promise. |
 

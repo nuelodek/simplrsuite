@@ -1,473 +1,204 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-    <title>Messages Interface</title>
-    <style>
-        /* Main container */
-        .messagesModal {
-            display: flex;
-            flex-direction: column;
-            background-color: #ffffff;
-            margin: 1% auto;
-            border: 1px solid #888;
-            width: 100%;
-            max-width: 1150px;
-            border-radius: 10px;
-            height: 95%;
-            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
-            padding: 0px 0px 20px 0px;
-            position: relative;
+﻿<?php
+require_once __DIR__ . '/../../app/auth.php';
+require_once __DIR__ . '/../../app/access.php';
+require_once __DIR__ . '/../../app/view.php';
+$db = database();
+$user = workspace_user($db);
+$companyId = (int)($user['company_id'] ?? 0);
+$employee = db_one($db,'SELECT id, unique_id, first_name, last_name FROM employees WHERE company_id = ? AND id = ? LIMIT 1',[$companyId,(int)($user['id'] ?? 0)]);
+if (!$employee) {
+    $employee = db_one($db,'SELECT id, unique_id, first_name, last_name FROM employees WHERE company_id = ? ORDER BY first_name, last_name LIMIT 1',[$companyId]);
+}
+$contacts = db_rows($db,'SELECT id, unique_id, first_name, last_name FROM employees WHERE company_id = ? AND id <> ? ORDER BY first_name, last_name',[$companyId,(int)($employee['id'] ?? 0)]);
+$selectedContact = $contacts[0] ?? null;
+$selectedRecipient = (string)($selectedContact['unique_id'] ?? '');
+$selectedName = trim((string)($selectedContact['first_name'] ?? '') . ' ' . (string)($selectedContact['last_name'] ?? '')) ?: 'Select a colleague';
+if (($ajax = ($_GET['ajax'] ?? '')) === '1') {
+    header('Content-Type: application/json');
+    $recipient = trim((string)($_GET['recipient'] ?? $_POST['recipient_id'] ?? $_POST['recipient'] ?? ''));
+    if (isset($_POST['action']) && $_POST['action'] === 'send') {
+        $message = trim((string)($_POST['message'] ?? ''));
+        if ($message === '' || $recipient === '') {
+            http_response_code(422);
+            echo json_encode(['error' => 'Choose a person and write a message.']);
+            exit;
         }
-
-        /* Header section */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px;
-            border-bottom: 1.6px solid #e7e7e7;
-            background-color: #f9f9f9;
-            border-top-left-radius: 10px;
-            border-top-right-radius: 10px;
+        $target = db_one($db,'SELECT id, unique_id, first_name, last_name FROM employees WHERE company_id = ? AND unique_id = ? LIMIT 1',[$companyId,$recipient]);
+        if (!$target) {
+            http_response_code(404);
+            echo json_encode(['error' => 'This conversation could not be found.']);
+            exit;
         }
+        db_run($db,'INSERT INTO messages (sender_id, recipient_id, message, status, timestamp) VALUES (?, ?, ?, ?, UTC_TIMESTAMP())',[(int)($employee['id'] ?? 0), $target['unique_id'], $message, 'sent']);
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+    if ($recipient === '') {
+        echo json_encode(['messages' => [], 'contact' => null]);
+        exit;
+    }
+    $target = db_one($db,'SELECT id, unique_id, first_name, last_name FROM employees WHERE company_id = ? AND unique_id = ? LIMIT 1',[$companyId,$recipient]);
+    if (!$target) {
+        echo json_encode(['messages' => [], 'contact' => null]);
+        exit;
+    }
+    $myUnique = (string)($employee['unique_id'] ?? '');
+    $messages = db_rows($db,'SELECT m.id, m.sender_id, m.recipient_id, m.message, m.timestamp, s.first_name AS sender_first_name, s.last_name AS sender_last_name FROM messages m LEFT JOIN employees s ON s.id = m.sender_id WHERE ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?)) ORDER BY m.id ASC',[(int)($employee['id'] ?? 0), $target['unique_id'], (int)$target['id'], $myUnique]);
+    $payload = [];
+    foreach ($messages as $row) {
+        $payload[] = ['id' => (int)($row['id'] ?? 0), 'sender_id' => (int)($row['sender_id'] ?? 0), 'recipient_id' => (string)($row['recipient_id'] ?? ''), 'message' => (string)($row['message'] ?? ''), 'timestamp' => $row['timestamp'] ?? null, 'is_me' => ((int)($row['sender_id'] ?? 0) === (int)($employee['id'] ?? 0))];
+    }
+    echo json_encode(['messages' => $payload, 'contact' => ['id' => $target['unique_id'], 'name' => trim($target['first_name'] . ' ' . $target['last_name'])]]);
+    exit;
+}
 
-        .header h4 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: bold;
-        }
-
-        .close-btn {
-            cursor: pointer;
-            font-size: 20px;
-            font-weight: bold;
-            padding: 5px 10px;
-            color: #888;
-            background-color: transparent;
-            border: none;
-        }
-
-        .close-btn:hover {
-            color: #000;
-        }
-
-        /* Sidebar (Panels section) */
-        .direcMessages {
-            width: 20%;
-            border-right: 1px solid #e7e7e7;
-            padding: 10px;
-            overflow-y: auto;
-        }
-
-        .direcMessages h4 {
-            font-weight: bold;
-            font-size: 18px;
-        }
-
-        .messages_tab {
-            display: flex;
-            flex-direction: column;
-            background-color: #ffffff;
-            border-bottom: 1px solid #e7e7e7;
-            margin-bottom: 20px;
-        }
-
-        .messages_tab button:hover {
-            background-color: #f1f1f1;
-        }
-
-        .messages_tab button:focus {
-            border-bottom: 2px solid #4CAF50;
-            font-weight: bolder;
-            transition-duration: .5s;
-        }
-
-        .messages_tablinks {
-            background-color: #ffffff;
-            float: left;
-            border: none;
-            outline: none;
-            cursor: pointer;
-            padding: 11px 3px;
-            transition: 0.3s;
-            font-size: 11px;
-            border-bottom: 2px solid transparent;
-            font-weight: normal;
-            text-align: left;
-        }
-
-        .messages_tablinks.active{
-            border-bottom: 2px solid #4CAF50;
-            font-weight: bolder;
-            transition-duration: .5s;
-        }
-
-        /* Chat section */
-        .chat {
-            width: 60%;
-            padding: 10px;
-        }
-
-        .chat-title {
-            font-weight: bold;
-            font-size: 18px;
-            margin-bottom: 15px;
-        }
-
-        .all-chats {
-            border: 1px solid #e7e7e7;
-            height: 300px;
-            overflow-y: auto;
-            padding: 10px;
-            background-color: #f9f9f9;
-            margin-bottom: 10px;
-        }
-
-        .text-box {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            height: 80%;
-            width: 100%;
-            max-height: 4rem;
-            margin-top: 20px;
-        }
-
-        .chat-box {
-            width: 100%;
-            height: 60%;
-            padding: 10px;
-            margin-bottom: 20px;
-            border: 1.5px solid #e7e7e7;
-            border-radius: 0.5rem;
-        }
-
-        .chat-box:focus {
-            border-color: #4CAF50;
-        }
-
-        .icon-button {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 1.2rem;
-            margin-left: 8px;
-            color: #666;
-        }
-
-        .icon-button:hover {
-            color: #4CAF50;
-            transition-duration: .5s;
-        }
-
-        .profile-btn {
-            background-color: transparent;
-            color: #4CAF50;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s ease;
-        }
-
-        .profile-btn:hover {
-            background-color: #f1f1f1;
-        }
-
-        /* Modal for attachment options */
-        .att-modal {
-            display: none;
-            position: absolute;
-            bottom: 70px;
-            right: 200px;
-            background-color: #ffffff;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            border-radius: 5px;
-            z-index: 100;
-            padding: 10px;
-            width: 150px;
-            opacity: 0;
-            transform: translateY(100%);
-            /* Start from below the button */
-            transition: all 0.3s ease-in-out;
-            /* Smooth transition */
-        }
-
-        .att-modal.active {
-            display: block;
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .att-modal button {
-            width: 100%;
-            border: none;
-            background: none;
-            text-align: left;
-            padding: 10px;
-            cursor: pointer;
-        }
-
-        .att-modal button:hover {
-            background-color: #f1f1f1;
-        }
-
-        /* Profile section */
-        .profile {
-            display: none;
-            width: 20%;
-            padding: 10px;
-            border-left: 1px solid #e7e7e7;
-        }
-
-        .profile h4 {
-            font-weight: bold;
-            font-size: 18px;
-            margin-bottom: 10px;
-        }
-
-        .profile-details {
-            text-align: center;
-        }
-
-        .profile-img {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            background-color: #f1f1f1;
-            margin: 0 auto 10px auto;
-        }
-
-        .profile-info h5 {
-            font-weight: bold;
-        }
-
-        .profile-info p {
-            color: #666;
-            font-size: 12px;
-        }
-
-        .badge {
-            background-color: #4CAF50;
-            color: white;
-            padding: 3px 6px;
-            border-radius: 10px;
-            font-size: 10px;
-        }
-
-        /* Modal for emoji picker */
-        .emoji-picker {
-            display: none;
-            position: absolute;
-            bottom: 70px;
-            right: 200px;
-            background-color: #ffffff;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            border-radius: 5px;
-            z-index: 100;
-            padding: 10px;
-            width: 300px;
-            max-height: 400px;
-            overflow-y: auto;
-            opacity: 0;
-            transform: translateY(100%);
-            transition: all 0.3s ease-in-out;
-        }
-
-        .emoji-picker.active {
-            display: block;
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .emoji-category {
-            padding: 10px 0;
-        }
-
-        .emoji-category h4 {
-            cursor: pointer;
-            margin-bottom: 5px;
-        }
-
-        .emoji-list {
-            display: none;
-            flex-wrap: wrap;
-        }
-
-        .emoji-list span {
-            font-size: 24px;
-            margin: 5px;
-            cursor: pointer;
-        }
-
-        .emoji-list.active {
-            display: flex;
-        }
-
-        /* Main content after header */
-        .main_content {
-            display: inline-flex;
-            flex: 1;
-            height: 90%;
-        }
-    </style>
-</head>
-
-<body>
-
-    <div class="messagesModal">
-        <!-- Header -->
-        <div class="header">
-            <h4>Messages</h4>
-            <button id="closeBtn" class="close-btn">X</button>
+suite_start('Messages','messages',$user);
+?>
+<div class="page-heading">
+  <div>
+    <h1>Messages</h1>
+    <p>Live direct messaging for your team, refreshed automatically.</p>
+  </div>
+  <span class="count-label" id="live-indicator">Realtime updates live</span>
+</div>
+<div class="messages-layout" style="display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:1rem; align-items:start; margin-top:1.5rem;">
+  <aside class="panel">
+    <div class="panel-head">
+      <h2>Contacts</h2>
+    </div>
+    <div class="panel-body" style="padding:0;">
+      <?php if (!$contacts): ?>
+        <div class="empty-state compact" style="padding:1.25rem;">
+          <h3>No colleagues yet</h3>
+          <p>Add a teammate to start a live conversation.</p>
         </div>
+      <?php else: ?>
+        <?php foreach ($contacts as $contact): $contactName = trim((string)($contact['first_name'] ?? '') . ' ' . (string)($contact['last_name'] ?? '')); $isSelected = ($selectedRecipient === (string)($contact['unique_id'] ?? '')); ?>
+          <button type="button" class="message-contact" data-recipient="<?= e((string)($contact['unique_id'] ?? '')) ?>" data-name="<?= e($contactName) ?>" style="display:flex; align-items:center; gap:.75rem; width:100%; background:<?= $isSelected ? '#edf8f6' : 'transparent' ?>; border:0; text-align:left; padding:.85rem 1rem; border-bottom:1px solid #e7edea; cursor:pointer;">
+            <span style="width:2.25rem; height:2.25rem; display:grid; place-items:center; border-radius:50%; background:#d9f1e5; color:#0f3d37; font-weight:700;"><?= e(mb_substr($contactName ?: 'T', 0, 1)) ?></span>
+            <span style="font-weight:600;"><?= e($contactName) ?></span>
+          </button>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </div>
+  </aside>
+  <section class="panel" style="min-height: 560px;">
+    <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+      <h2 id="thread-title"><?= e($selectedName) ?></h2>
+      <span class="count-label" id="thread-status">online</span>
+    </div>
+    <div id="message-thread" class="message-thread" style="height:430px; overflow:auto; padding:1rem; background:#f7faf9; border-radius:12px; border:1px solid #e4ece9; margin:0 1rem 1rem;">
+      <div class="empty-state compact"><h3>Waiting for a colleague.</h3></div>
+    </div>
+    <div style="padding:0 1rem 1rem; display:flex; gap:.75rem; align-items:flex-end;">
+      <textarea id="message-input" rows="3" maxlength="2000" placeholder="Type a message…" style="flex:1; resize:vertical; border:1px solid #d8e0dd; border-radius:10px; padding:.85rem 1rem; min-height:80px;"></textarea>
+      <button type="button" id="send-message" class="button" style="align-self:stretch;">Send</button>
+    </div>
+  </section>
+</div>
+<script>
+(function () {
+  const currentRecipient = <?= json_encode((string)($selectedRecipient ?? ''), JSON_THROW_ON_ERROR) ?>;
+  const thread = document.getElementById('message-thread');
+  const title = document.getElementById('thread-title');
+  const input = document.getElementById('message-input');
+  const status = document.getElementById('thread-status');
+  const contacts = Array.from(document.querySelectorAll('.message-contact'));
+  let activeRecipient = currentRecipient;
 
-        <!-- Main content container -->
-        <div class="main_content">
-            <!-- Sidebar (Panels) -->
-            <div class="direcMessages">
-                <h4>Panels</h4>
-                <div class="messages_tab">
-                    <button class="messages_tablinks">Feed</button>
-                    <button class="messages_tablinks">Start Here</button>
-                    <button class="messages_tablinks">What's New</button>
-                    <button class="messages_tablinks">Resources</button>
-                </div>
-                <h4>Teams</h4>
-                <div class="messages_tab">
-                    <button class="messages_tablinks">Marketing</button>
-                    <button class="messages_tablinks">Development</button>
-                </div>
-                <h4>Managers</h4>
-                <div class="messages_tab">
-                    <button class="messages_tablinks">John Doe</button>
-                    <button class="messages_tablinks">Jane Smith</button>
-                </div>
-                <h4>Employees</h4>
-                <?php
-                include '../../sql_queries/db.php';
-                $companyId = $_SESSION['company_id'];
-                $sql = "SELECT * FROM employees WHERE company_id = ?";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("i", $companyId);
-                $stmt->execute();
-                $result = $stmt->get_result();
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function (char) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char];
+    });
+  }
 
-                $employees = [];
-                if ($result && $result->num_rows > 0) {
-                    while ($row = $result->fetch_assoc()) {
-                        $employees[] = $row;
-                    }
-                }
+  function renderMessages(messages) {
+    if (!messages.length) {
+      thread.innerHTML = '<div class="empty-state compact"><h3>No messages yet</h3><p>Say hello to start the conversation.</p></div>';
+      return;
+    }
+    const rows = messages.map((message) => {
+      const isMine = !!message.is_me;
+      const sender = isMine ? 'You' : (message.sender_name || 'Team member');
+      return '<div style="display:flex; justify-content:' + (isMine ? 'flex-end' : 'flex-start') + '; margin-bottom:.75rem;">' +
+        '<div style="max-width:75%; background:' + (isMine ? '#173d3b' : '#ffffff') + '; color:' + (isMine ? '#ffffff' : '#1d2c2b') + '; border:' + (isMine ? '1px solid #173d3b' : '1px solid #dfe7e4') + '; border-radius:16px; padding:.7rem .9rem; box-shadow:0 8px 18px rgba(10,18,16,.04);">' +
+        '<div style="font-size:.75rem; opacity:.8; margin-bottom:.35rem;">' + escapeHtml(sender) + '</div>' +
+        '<div>' + escapeHtml(message.message) + '</div>' +
+        '<div style="font-size:.7rem; opacity:.75; margin-top:.4rem; text-align:right;">' + escapeHtml(new Date(message.timestamp || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + '</div>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+    thread.innerHTML = rows;
+    thread.scrollTop = thread.scrollHeight;
+  }
 
-                $conn->close();
-                $employees_list = $employees;
-                echo '<div class="messages_tab">';
-                foreach ($employees_list as $employee) {
-                    echo '<button class="messages_tablinks" id="emp_btn" data-employee-id="' . $employee['unique_id'] . '" onclick="handleEmployeeButtonClick(\'' . $employee['unique_id'] . '\')">' . $employee['first_name'] . ' ' . $employee['last_name'] . '</button>';
-                }
-                echo '</div>';
+  async function loadMessages() {
+    if (!activeRecipient) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('ajax', '1');
+    url.searchParams.set('recipient', activeRecipient);
+    const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    if (!response.ok) {
+      status.textContent = 'offline';
+      return;
+    }
+    const payload = await response.json();
+    if (payload.contact && payload.contact.name) {
+      title.textContent = payload.contact.name;
+    }
+    const messages = (payload.messages || []).map((message) => ({
+      ...message,
+      sender_name: message.is_me ? 'You' : (payload.contact && payload.contact.name) || 'Team member'
+    }));
+    renderMessages(messages);
+    status.textContent = 'online';
+  }
 
-                ?>
-            </div>
+  async function sendMessage() {
+    const message = input.value.trim();
+    if (!activeRecipient || !message) return;
+    const form = new URLSearchParams();
+    form.append('action', 'send');
+    form.append('recipient_id', activeRecipient);
+    form.append('message', message);
+    const response = await fetch(window.location.href + (window.location.href.includes('?') ? '&' : '?') + 'ajax=1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: form.toString()
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error) {
+      status.textContent = payload.error || 'Message failed';
+      return;
+    }
+    input.value = '';
+    await loadMessages();
+  }
 
-            <!-- Chat section -->
-            <div class="chat">
-                <button class="profile-btn" onclick="toggleProfileSection()">
-                    <h4 class="chat-title" id="chatUserName"></h4>
-                </button>
-                <div class="all-chats">
-                    <!-- <p>User1: Hi there!</p>
-                    <p>User2: Hello, how's it going?</p> -->
-                </div>
-                <div class="text-box">
-                    <?php
-                        include '../../sql_queries/db.php';
-                        $companyId = $_SESSION['company_id'];
-                        $sql = "SELECT * FROM employees WHERE company_id = ?";
-                        $stmt = $conn->prepare($sql);
-                        $stmt->bind_param("i", $companyId);
-                        $stmt->execute();
-                        $result = $stmt->get_result();
+  contacts.forEach((button) => {
+    button.addEventListener('click', function () {
+      activeRecipient = button.dataset.recipient || '';
+      title.textContent = button.dataset.name || 'Team member';
+      contacts.forEach((item) => item.style.background = item === button ? '#edf8f6' : 'transparent');
+      loadMessages();
+    });
+  });
 
-                        $employees = [];
-                        if ($result && $result->num_rows > 0) {
-                            while ($row = $result->fetch_assoc()) {
-                                $employees[] = $row;
-                            }
-                        }
-                        $conn->close();
-                        $employees_list = $employees;
+  document.getElementById('send-message').addEventListener('click', sendMessage);
+  input.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  });
 
-                    echo     '<input name="chat-box" id="chat-box" class="chat-box" placeholder="Type your message here...">';
-                    echo '<button id="emojiButton" class="icon-button">';
-                    echo    '<i class="fas fa-smile"></i>';
-                    echo'</button>';
-
-                    echo'<button id="micButton" class="icon-button">';
-                    echo    '<i class="fas fa-microphone"></i>';
-                    echo'</button>';
-
-                    echo'<button id="attachButton" class="icon-button">';
-                    echo    '<i class="fas fa-paperclip"></i>';
-                    echo'</button>';
-                    echo'<button id="sendButton" onclick="sendMessageToRecipient(\'' . $employee['unique_id'] . '\')" class="icon-button">';
-                    echo    '<i class="fas fa-paper-plane"></i>';
-                    echo'</button>';
-                    ?>
-                    
-                </div>
-
-
-                <!-- Modal for attachments -->
-                <div id="attModal" class="att-modal">
-                    <button>Image</button>
-                    <button>File</button>
-                    <button>Document</button>
-                </div>
-
-                <!-- Emoji Picker Modal -->
-                <div id="emojiPicker" class="emoji-picker">
-                    <div class="emoji-category">
-                        <h4 id="smileys">Smileys & People</h4>
-                        <div class="emoji-list" id="smileysList">
-                            <span>😊</span><span>😂</span><span>😍</span><span>😎</span>
-                        </div>
-                    </div>
-                    <div class="emoji-category">
-                        <h4 id="animals">Animals & Nature</h4>
-                        <div class="emoji-list" id="animalsList">
-                            <span>🐶</span><span>🐱</span><span>🐭</span><span>🦄</span>
-                        </div>
-                    </div>
-                    <!-- Add more categories here -->
-                </div>
-            </div>
-
-            <!-- Profile section -->
-            <div id="profile-section" class="profile">
-                <h4>Profile</h4>
-                <div class="profile-details">
-                    <div class="profile-img"></div>
-                    <div class="profile-info">
-                        <h5 id="profile-name">John Doe</h5>
-                        <p>Manager</p>
-                        <span class="badge">Active</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-
-
-</body>
-<script src="../../scripts/messages.js">
-
+  if (activeRecipient) {
+    loadMessages();
+    setInterval(loadMessages, 5000);
+  }
+})();
 </script>
-</html>
+<?php suite_end(); ?>

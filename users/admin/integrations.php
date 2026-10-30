@@ -50,7 +50,7 @@ $legacyLogos = [
 <section class="integration-card"><div class="feature-icon"><?= icon('briefcase') ?></div><h2>Payroll & banking</h2><span class="badge"><?= config('PAYROLL_PAYSTACK_TRANSFERS_ENABLED','false') === 'true' && paystack_ready() ? 'Paystack transfers enabled' : 'Payroll available · transfers disabled' ?></span><p>Prepare NGN pay runs, approve payslips, and export bank transfers. Paystack transfers are an explicit, per-person action after owner configuration.</p><a class="text-link" href="/users/admin/payroll.php">Open payroll</a><small>Statutory amounts are manually configured for each pay run and must be checked by a qualified payroll professional. No bank feeds or balances are read.</small></section>
 <section class="integration-card"><div class="feature-icon"><?= icon('grid') ?></div><h2>Workspace records</h2><span class="badge active">Available</span><p>Projects, tasks, CRM, finance records, and operations share your business workspace.</p><a class="text-link" href="/users/admin/modules.php">Open your tools <?= icon('arrow') ?></a></section></div>
 <section class="legacy-integrations" aria-labelledby="legacy-integrations-title">
-    <div class="section-heading"><div><h2 id="legacy-integrations-title">Future integrations</h2><p>Connected services are active in the workspace. The items below are future requests or partner-driven add-ons, not active workspace connections.</p></div></div>
+    <div class="section-heading"><div><h2 id="legacy-integrations-title">Future integrations</h2><p>Browse planned services below. Their Connect buttons are placeholders only; these providers cannot be connected from Simplr yet.</p></div></div>
     <div class="catalog-search"><span class="search-field"><?= icon('search') ?><label class="sr-only" for="catalog-search">Search integrations</label><input id="catalog-search" class="filter-input" type="search" placeholder="Search future integrations, e.g. Slack, Jira…" autocomplete="off" data-catalog-search></span><span class="count-label" data-catalog-count aria-live="polite"></span></div>
     <p class="catalog-empty subtle" data-catalog-empty hidden>No future integration matches that name. Let us know what you need and we will consider it.</p>
     <div class="legacy-integration-groups">
@@ -69,6 +69,7 @@ $legacyLogos = [
                             </span>
                             <span class="legacy-integration-name"><?= e($service) ?></span>
                             <span class="badge">Planned</span>
+                            <button class="button secondary small" type="button" disabled aria-label="Connect <?= e($service) ?> (coming soon)" title="Connection setup is not available yet">Connect <?= e($service) ?></button>
                         </li>
                     <?php endforeach; ?>
                 </ul>
