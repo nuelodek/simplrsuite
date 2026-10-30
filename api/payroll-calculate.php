@@ -88,6 +88,7 @@ if (!$run) {
     $existingOther = payroll_amount_cents($item['other_deductions']);
     if ($existingOther === null) throw new UnexpectedValueException('The saved voluntary deduction amount is invalid.');
     $net = payroll_net_cents($item);
+    if ($net <= 0) throw new InvalidArgumentException('Net take-home pay must remain positive after employee deductions.');
     $gross = $amounts['basic_pay'] + $amounts['housing'] + $amounts['transport'] + $amounts['allowances'] + $amounts['overtime_pay'] + $amounts['bonus'];
     $statutory = $estimate['paye'] + $estimate['pension'] + $estimate['nhf'];
     $voluntary = $amounts['voluntary_pension'] + $amounts['salary_advance_deduction'] + $existingOther;
@@ -95,7 +96,7 @@ if (!$run) {
     $pensionable = $amounts['basic_pay'] + $amounts['housing'] + $amounts['transport'];
     $employerPension = intdiv($pensionable * 10 + 50,100);
     $employerNsitf = intdiv($gross + 50,100);
-    $activeStaff = (int)(db_one($db,"SELECT COUNT(*) AS count FROM employees WHERE company_id = ? AND archived_at IS NULL",[$companyId])['count'] ?? 0);
+    $activeStaff = count(payroll_staff($db,$companyId));
     $employerItf = $activeStaff >= 5 ? intdiv($gross + 50,100) : 0;
     $ratio = $gross > 0 ? number_format($deductions / $gross,3,'.','') : '0.000';
 
@@ -170,7 +171,7 @@ if (!$run) {
     ],200);
 } catch (InvalidArgumentException $error) {
     $db->rollback();
-    json_response(['ok'=>false,'error'=>$error->getMessage(),'compliance_flags'=>['deduction_cap_exceeded'=>str_contains($error->getMessage(),'one-third'),'review_required'=>true],'persisted'=>false],422);
+    json_response(['ok'=>false,'error'=>$error->getMessage(),'compliance_flags'=>['deduction_cap_exceeded'=>str_contains($error->getMessage(),'one-third') || str_contains($error->getMessage(),'cannot exceed gross pay'),'review_required'=>true],'persisted'=>false],422);
 } catch (Throwable $error) {
     $db->rollback();
     throw $error;

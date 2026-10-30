@@ -249,8 +249,9 @@ Payroll supports company-scoped NGN compensation profiles, monthly pay runs,
 employee payslips, editable per-run statutory deduction amounts, an optional
 2026 Nigerian estimate action on draft runs, and bank-transfer CSV exports. The
 estimate uses organization-supplied, independently unverified rates; annualizes
-pay, applies progressive bands and the stated minimum-tax floor, and can include
-pension/NHF only where marked applicable. Rent relief is only included when a
+recurring pay, applies progressive bands and the NGN 70,000 monthly PAYE
+exemption, and can include pension/NHF only where marked applicable. It does not
+apply the earlier 1% minimum-tax floor. Rent relief is only included when a
 rent record reference is supplied and the reviewer marks its documentation
 verified. The action can be unapplied in a draft to restore the prior PAYE,
 pension and NHF amounts. Every result remains editable before approval. The estimate does not
@@ -271,6 +272,29 @@ reserved until reconciled. Transfers remain disabled unless
 `PAYROLL_PAYSTACK_TRANSFERS_ENABLED=true`. Bank account numbers are encrypted at
 rest. Have a qualified payroll professional verify every statutory amount
 before approval. HR penalties are never imported as payroll deductions.
+
+The stateful JSON endpoint `POST /api/v1/payroll/calculate` uses the existing
+signed-in workspace session, CSRF header, and payroll edit permission; it does
+not accept JWT bearer tokens. It updates only an employee item in an existing
+2026 draft run, so run submission and independent approval remain separate.
+Send monetary inputs as decimal strings (for example `"250000.00"`) to preserve
+kobo precision. The employee identifier is the employee record's `unique_id`.
+The request accepts `earnings` (`basic_salary`, `housing_allowance`,
+`transport_allowance`, `other_allowances`, `overtime_pay`, `bonuses`),
+`documented_reliefs.annual_rent_paid`, and optional
+`configuration_overrides.voluntary_pension_contribution` and
+`configuration_overrides.salary_advance_deduction`. Rent relief is used only
+when the employee's rent documentation is marked verified on their payroll
+profile. Statutory deductions, voluntary pension, salary-advance recovery,
+and other voluntary deductions are reported separately. If total deductions
+exceed one-third of gross pay, the endpoint rejects the request without saving;
+it never silently removes statutory or voluntary deductions. Employer pension,
+NSITF and ITF amounts are estimates only and are not deducted from take-home pay
+or remitted. Payroll does not file PAYE, VAT, WHT, annual returns, or tax-portal
+submissions.
+The supplied schedule basis is the [Nigeria Tax Act 2025 (NRS PDF)](https://www.nrs.gov.ng/uploads/NIGERIA_TAX_ACT_2025_ef6bb812a5.pdf);
+have a Nigerian payroll professional verify its interpretation and all employee
+inputs before approval.
 
 Billing offers **Paystack for NGN and Flutterwave for USD**, following the original
 `simplr24` currency/provider choice. The server owns prices, conversion, orders and

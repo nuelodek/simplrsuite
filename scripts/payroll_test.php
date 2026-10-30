@@ -57,6 +57,9 @@ payroll_expect($sampleEstimate['pension'] === 3600000 && $sampleEstimate['nhf'] 
 $estimateItem['basic_pay'] = '66666.66';
 $estimate = payroll_nigerian_2026_estimate($estimateItem);
 payroll_expect($estimate['paye'] === 0 && $estimate['minimum_wage_exempt'],'2026 estimate exempts monthly gross at or below NGN 70,000 from PAYE.');
+$estimateItem['basic_pay'] = '70000.01';
+$estimate = payroll_nigerian_2026_estimate($estimateItem);
+payroll_expect($estimate['paye'] === 50000 && !$estimate['minimum_wage_exempt'],'Monthly gross just above NGN 70,000 is taxed through the annualized progressive bands.');
 $estimateItem['basic_pay'] = '100000.00';
 $estimateItem['bonus'] = '120000.00';
 $estimate = payroll_nigerian_2026_estimate($estimateItem);

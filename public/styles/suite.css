@@ -967,3 +967,30 @@ time.overdue { color: #a33f31; font-weight: 600; }
   .messages-layout > section { min-height: 0 !important; }
   #message-thread { height: min(440px,55vh) !important; min-height: 250px; }
 }
+
+.sidebar-header { margin-bottom: 22px; padding: 0 4px 20px; border-bottom: 1px solid var(--line); }
+.sidebar-header > .brand { min-width: 0; padding: 0 4px; }
+.sidebar-collapse { flex: 0 0 34px; width: 34px; height: 34px; color: #66735f; }
+.sidebar-collapse:hover { background: #f2f5ed; color: var(--brand); }
+.sidebar-collapse .icon { width: 18px; height: 18px; }
+.suite-sidebar.collapsed { width: 76px; padding-inline: 12px; }
+.suite-sidebar.collapsed .sidebar-header { flex-direction: column; justify-content: center; gap: 14px; padding-inline: 0; }
+.suite-sidebar.collapsed .sidebar-header > .brand { padding: 0; }
+.suite-sidebar.collapsed .brand-words, .suite-sidebar.collapsed .nav-group-label, .suite-sidebar.collapsed .sidebar-link-label { display: none; }
+.suite-sidebar.collapsed nav.sidebar-nav a { justify-content: center; padding-inline: 8px; }
+.suite-sidebar.collapsed .sidebar-bottom form { display: flex; justify-content: center; }
+.suite-sidebar.collapsed .logout-button { justify-content: center; padding-inline: 8px; }
+.suite-body.sidebar-collapsed { margin-left: 76px; }
+@media (max-width: 680px) {
+  .suite-sidebar, .suite-sidebar.collapsed { width: 240px; padding: 32px 18px 15px; }
+  .suite-sidebar.collapsed .sidebar-header { flex-direction: row; justify-content: space-between; gap: 8px; padding: 0 4px 20px; }
+  .suite-sidebar.collapsed .sidebar-header > .brand { padding: 0 4px; }
+  .suite-sidebar.collapsed .brand-words, .suite-sidebar.collapsed .sidebar-link-label { display: initial; }
+  .suite-sidebar.collapsed .sidebar-header .brand-words { display: flex; }
+  .suite-sidebar.collapsed .nav-group-label { display: block; }
+  .suite-sidebar.collapsed nav.sidebar-nav a { justify-content: flex-start; padding-inline: 12px; }
+  .suite-sidebar.collapsed .sidebar-bottom form { display: block; }
+  .suite-sidebar.collapsed .logout-button { justify-content: flex-start; padding-inline: 12px; }
+  .suite-body.sidebar-collapsed { margin-left: 0; }
+  .sidebar-collapse { display: none; }
+}
