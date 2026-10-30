@@ -90,19 +90,17 @@
 .command-trigger span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 kbd { display: inline-flex; align-items: center; gap: 3px; min-width: 22px; justify-content: center; padding: 2px 6px; border: 1px solid #dfe6da; border-bottom-width: 2px; border-radius: 6px; background: #fff; color: #6b7766; font: 600 10.5px/1.5 'DM Sans', system-ui, sans-serif; white-space: nowrap; }
 .topbar-end { gap: 10px; }
-.topbar-end .tour-trigger { width: 38px; height: 38px; padding: 0; color: #66735f; }
-.topbar-end .tour-trigger:hover { background: #f2f5ed; color: var(--brand); }
-.topbar-workspace { display: flex; align-items: center; gap: 8px; max-width: 190px; min-width: 0; }
-.topbar-workspace > span:last-child { display: block; min-width: 0; }
-.topbar-workspace strong, .topbar-workspace small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topbar-workspace strong { font-size: 12px; font-weight: 650; color: #3c4e44; }
-.topbar-workspace small { color: var(--muted); font-size: 10px; }
 .topbar-menu { position: relative; }
 .topbar-menu > summary { list-style: none; cursor: pointer; }
 .topbar-menu > summary::-webkit-details-marker { display: none; }
 .quick-create > summary .icon { width: 16px; height: 16px; }
 .user-menu > summary { display: flex; align-items: center; gap: 9px; padding: 4px 8px 4px 4px; border: 1px solid transparent; border-radius: 30px; transition: background .15s, border-color .15s; }
 .user-menu > summary:hover, .user-menu[open] > summary { background: #f4f7f0; border-color: var(--line); }
+.user-menu > summary.company-logo-button { display: grid; place-items: center; width: 40px; height: 40px; padding: 2px; overflow: hidden; border-color: var(--line); border-radius: 50%; background: #fff; }
+.company-logo-image { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; }
+.settings-company-logo { display: block; width: 88px; height: 88px; margin: 0 0 10px; padding: 5px; border: 1px solid var(--line); border-radius: 12px; object-fit: contain; background: #fff; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: var(--muted); font-size: 13px; }
+.checkbox-label input { width: auto; }
 .user-menu > summary .icon { width: 15px; height: 15px; color: #8a9684; }
 .user-menu-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: #3c4e44; }
 .user-menu .avatar, .menu-identity .avatar { background: linear-gradient(135deg, #d3ed9f, #a9d39a); color: var(--brand); font-weight: 700; }
@@ -213,13 +211,9 @@ time.overdue { color: #a33f31; font-weight: 600; }
   .breadcrumb { display: none; }
   .command-trigger { flex: 1; margin: 0; min-width: 0; }
   .command-trigger span { font-size: 12px; }
-  .topbar-workspace { max-width: 92px; gap: 5px; }
-  .topbar-workspace strong { font-size: 10px; }
-  .topbar-workspace small { display: none; }
   .quick-create > summary span, .user-menu > summary > .icon { display: none; }
   .quick-create > summary { padding: 8px 10px; }
   .topbar-end { gap: 4px; }
-  .topbar-end .tour-trigger { width: 36px; height: 36px; }
   .menu-popover { position: fixed; left: 12px; right: 12px; top: 66px; width: auto; }
   .command-dialog { margin-top: 12px; max-height: calc(100% - 24px); }
   .command-foot { display: none; }
@@ -942,7 +936,20 @@ time.overdue { color: #a33f31; font-weight: 600; }
 @media (max-width: 364px) {
   .suite-topbar { padding-inline: 12px; }
   .topbar-end { gap: 2px; }
-  .topbar-workspace { max-width: 52px; }
+}
+
+.neuron-list { display: grid; gap: 14px; }
+.neuron-card { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.neuron-card h3 { margin: 0 0 5px; font-size: 16px; }
+.neuron-card p { margin: 5px 0; }
+.neuron-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.neuron-card-head > div { min-width: 0; }
+.neuron-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.neuron-card details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.neuron-card summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 560px) {
+  .neuron-card { padding: 14px; }
+  .neuron-card-head { gap: 8px; }
 }
 
 .step-number, .workflow-grid p, .section-label { color: #5f6e58; }

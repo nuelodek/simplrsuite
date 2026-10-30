@@ -147,11 +147,12 @@ serving the repository directly without its deny rules can expose private files.
   linked repository reads through its own account. Owners match GitHub usernames to
   employees (GitHub page or the employee record), so synced tasks are assigned,
   follow reassignments made on GitHub, alert the assignee and get the due-date
-  reminders from `jobs/notifications.php`. Schedule both jobs on the server:
+  reminders from `jobs/notifications.php`. Schedule all three CLI jobs on the server:
   `*/15 * * * * php jobs/github-sync.php` (auto-sync can be turned off per
   repository; `GITHUB_SYNC_MINUTES` changes the interval) and
-  `* * * * * php jobs/notifications.php`; `deploy/scheduler.md` has the full cron
-  setup and monitoring. Nothing is written to GitHub. Test it offline with
+  `* * * * * php jobs/notifications.php` and
+  `* * * * * php jobs/neurons.php`; `deploy/scheduler.md` has the full cron setup
+  and monitoring. Nothing is written to GitHub. Test it offline with
   `scripts/github_stub_server.php` and `scripts/github_smoke_test.py` (instructions
   at the top of the test).
 - Employee and manager directories and email invitations. Invitees choose their
@@ -222,7 +223,7 @@ deadlines and warning expiry are reviewed by the CLI scheduler. Run
 short response windows are processed promptly; task reminders are deduplicated
 to one per task per local day. The job also retries the email outbox and sends
 digests. Configure `APP_URL` as an HTTPS origin before enabling SMTP.
-Both jobs record a heartbeat; `php scripts/scheduler_status.php` exits 1 when a job
+All scheduled jobs record a heartbeat; `php scripts/scheduler_status.php` exits 1 when a job
 is late, stuck or failing, so it can drive an alert. See `deploy/scheduler.md`.
 `php scripts/ops_check.php` adds database, migration, email outbox, payment, disk,
 backup and error-rate checks; `deploy/incident-runbook.md` says what to do per alert.
@@ -245,8 +246,16 @@ Configure the default response window and warning expiry under Workspace
 settings.
 
 Payroll supports company-scoped NGN compensation profiles, monthly pay runs,
-employee payslips, editable per-run statutory deduction amounts, and
-bank-transfer CSV exports. A payroll editor submits a run for approval by the
+employee payslips, editable per-run statutory deduction amounts, an optional
+2026 Nigerian estimate action on draft runs, and bank-transfer CSV exports. The
+estimate uses organization-supplied, independently unverified rates; annualizes
+pay, applies progressive bands and the stated minimum-tax floor, and can include
+pension/NHF only where marked applicable. Rent relief is only included when a
+rent record reference is supplied and the reviewer marks its documentation
+verified. The action can be unapplied in a draft to restore the prior PAYE,
+pension and NHF amounts. Every result remains editable before approval. The estimate does not
+file or remit any statutory contribution and must not be treated as certified
+legal or tax advice. A payroll editor submits a run for approval by the
 workspace owner or a distinct employee with payroll edit access; preparers cannot
 self-approve. The Salary Vault tracks a cleared, tenant-scoped NGN allocation in
 an auditable ledger. Paystack top-ups are disabled unless
@@ -260,9 +269,8 @@ cleared Vault funds, reserve them before provider submission, and return funds
 only after Paystack confirms failure or reversal. Uncertain outcomes remain
 reserved until reconciled. Transfers remain disabled unless
 `PAYROLL_PAYSTACK_TRANSFERS_ENABLED=true`. Bank account numbers are encrypted at
-rest. Payroll does not calculate or file Nigerian tax, pension, or housing-fund
-obligations. Have a qualified payroll professional verify each amount before
-approval. HR penalties are never imported as payroll deductions.
+rest. Have a qualified payroll professional verify every statutory amount
+before approval. HR penalties are never imported as payroll deductions.
 
 Billing offers **Paystack for NGN and Flutterwave for USD**, following the original
 `simplr24` currency/provider choice. The server owns prices, conversion, orders and

@@ -29,18 +29,145 @@ function payroll_provider_amount_matches(mixed $providerAmount, mixed $currency,
 function payroll_net_cents(array $item): int {
     $gross = 0;
     $deductions = 0;
-    foreach (['basic_pay','allowances','bonus'] as $field) {
-        $amount = payroll_amount_cents($item[$field] ?? null);
+    foreach (['basic_pay','housing','transport','allowances','bonus','overtime_pay'] as $field) {
+        $amount = payroll_amount_cents($item[$field] ?? (in_array($field,['overtime_pay'],true) ? '0.00' : null));
         if ($amount === null || $amount < 0) throw new InvalidArgumentException('Payroll earnings must be valid non-negative amounts.');
         $gross += $amount;
     }
-    foreach (['paye','pension','nhf','other_deductions'] as $field) {
-        $amount = payroll_amount_cents($item[$field] ?? null);
+    foreach (['paye','pension','nhf','voluntary_pension','salary_advance_deduction','other_deductions'] as $field) {
+        $amount = payroll_amount_cents($item[$field] ?? (in_array($field,['voluntary_pension','salary_advance_deduction'],true) ? '0.00' : null));
         if ($amount === null || $amount < 0) throw new InvalidArgumentException('Payroll deductions must be valid non-negative amounts.');
         $deductions += $amount;
     }
     if ($deductions > $gross) throw new InvalidArgumentException('Total deductions cannot exceed gross pay.');
+    if ($deductions > intdiv($gross,3)) throw new InvalidArgumentException('Total employee deductions exceed the one-third gross-pay safeguard. Review voluntary deductions and statutory inputs before continuing.');
     return $gross - $deductions;
+}
+
+function payroll_nigerian_2026_estimate(array $item): array {
+    $basic = payroll_amount_cents($item['basic_pay'] ?? null);
+    $housing = payroll_amount_cents($item['housing'] ?? null);
+    $transport = payroll_amount_cents($item['transport'] ?? null);
+    $allowances = payroll_amount_cents($item['allowances'] ?? null);
+    $bonus = payroll_amount_cents($item['bonus'] ?? null);
+    $overtime = payroll_amount_cents($item['overtime_pay'] ?? '0.00');
+    $annualRent = payroll_amount_cents($item['annual_rent_paid'] ?? null);
+    if (in_array(null,[$basic,$housing,$transport,$allowances,$bonus,$overtime,$annualRent],true)
+        || min($basic,$housing,$transport,$allowances,$bonus,$overtime,$annualRent) < 0) {
+        throw new InvalidArgumentException('Nigerian payroll estimate inputs must be valid non-negative amounts.');
+    }
+
+    $monthlyRecurringGross = $basic + $housing + $transport + $allowances;
+    $monthlyGross = $monthlyRecurringGross + $bonus + $overtime;
+    $annualGross = $monthlyRecurringGross * 12 + $bonus + $overtime;
+    $pensionAnnual = !empty($item['pension_applicable'])
+        ? intdiv(($basic + $housing + $transport) * 12 * 8 + 50,100)
+        : 0;
+    $nhfAnnual = !empty($item['nhf_applicable'])
+        ? intdiv($basic * 12 * 25 + 500,1000)
+        : 0;
+    $rentReliefAnnual = !empty($item['rent_relief_documented'])
+        ? min(intdiv($annualRent * 20 + 50,100),50000000)
+        : 0;
+    $taxableAnnual = max(0,$annualGross - $pensionAnnual - $nhfAnnual - $rentReliefAnnual);
+
+    $remaining = $taxableAnnual;
+    $annualTax = 0;
+    foreach ([[80000000,0,1],[220000000,15,100],[900000000,18,100],[1300000000,21,100],[2500000000,23,100],[PHP_INT_MAX,25,100]] as [$bandLimit,$rate,$denominator]) {
+        if ($remaining <= 0) break;
+        $inBand = min($remaining,$bandLimit);
+        $annualTax += intdiv($inBand * $rate + intdiv($denominator,2),$denominator);
+        $remaining -= $inBand;
+    }
+    if ($monthlyGross <= 7000000) $annualTax = 0;
+
+    return [
+        'paye'=>intdiv($annualTax + 6,12),
+        'pension'=>intdiv($pensionAnnual + 6,12),
+        'nhf'=>intdiv($nhfAnnual + 6,12),
+        'annual_gross'=>$annualGross,
+        'annual_taxable'=>$taxableAnnual,
+        'annual_tax'=>$annualTax,
+        'minimum_wage_exempt'=>$monthlyGross <= 7000000,
+    ];
+}
+
+function payroll_apply_nigerian_2026_estimates(mysqli $db, int $companyId, int $runId, int $actorId, string $actorRole): void {
+    $db->begin_transaction();
+    try {
+        $run = db_one($db,"SELECT id,period_start,statutory_settings_version FROM payroll_runs WHERE id = ? AND company_id = ? AND status = 'draft' FOR UPDATE",[$runId,$companyId]);
+        if (!$run) { $db->rollback(); fail('Only a draft payroll run in your workspace can use statutory estimates.',409); }
+        if (substr((string)$run['period_start'],0,4) !== '2026') {
+            $db->rollback();
+            fail('The selected Nigerian estimate schedule is for the 2026 tax year only.',422);
+        }
+        $items = db_rows($db,'SELECT * FROM payroll_items WHERE run_id = ? AND company_id = ? ORDER BY id FOR UPDATE',[$runId,$companyId]);
+        if (!$items) { $db->rollback(); fail('This payroll run has no items to calculate.',409); }
+        foreach ($items as $item) {
+            $estimate = payroll_nigerian_2026_estimate($item);
+            $values = [
+                'basic_pay'=>$item['basic_pay'],
+                'housing'=>$item['housing'],
+                'transport'=>$item['transport'],
+                'allowances'=>$item['allowances'],
+                'bonus'=>$item['bonus'],
+                'overtime_pay'=>$item['overtime_pay'],
+                'paye'=>accounting_decimal_from_cents($estimate['paye']),
+                'pension'=>accounting_decimal_from_cents($estimate['pension']),
+                'nhf'=>accounting_decimal_from_cents($estimate['nhf']),
+                'voluntary_pension'=>$item['voluntary_pension'],
+                'salary_advance_deduction'=>$item['salary_advance_deduction'],
+                'other_deductions'=>$item['other_deductions'],
+            ];
+            try { $net = payroll_net_cents($values); }
+            catch (InvalidArgumentException $error) {
+                $db->rollback();
+                fail('Estimated payroll for ' . $item['staff_name'] . ' is not valid: ' . $error->getMessage(),422);
+            }
+            db_run($db,'UPDATE payroll_items SET previous_paye = IF(? = \'\',paye,previous_paye), previous_pension = IF(? = \'\',pension,previous_pension), previous_nhf = IF(? = \'\',nhf,previous_nhf), paye = ?, pension = ?, nhf = ?, net_pay = ? WHERE id = ? AND company_id = ? AND run_id = ?',[
+                (string)$run['statutory_settings_version'],(string)$run['statutory_settings_version'],(string)$run['statutory_settings_version'],
+                $values['paye'],$values['pension'],$values['nhf'],accounting_decimal_from_cents($net),$item['id'],$companyId,$runId,
+            ]);
+        }
+        db_run($db,"UPDATE payroll_runs SET statutory_settings_version = 'nigeria-2026-user-estimate-v1', statutory_applied_by = ?, statutory_applied_at = UTC_TIMESTAMP() WHERE id = ? AND company_id = ?",[$actorId,$runId,$companyId]);
+        audit_event($db,$companyId,'payroll.nigerian_estimates_applied','payroll_run',(string)$runId,['settings_version'=>'nigeria-2026-user-estimate-v1','staff_count'=>count($items)],$actorRole,$actorId);
+        $db->commit();
+    } catch (Throwable $error) { $db->rollback(); throw $error; }
+}
+
+function payroll_unapply_nigerian_2026_estimates(mysqli $db, int $companyId, int $runId, int $actorId, string $actorRole): void {
+    $db->begin_transaction();
+    try {
+        $run = db_one($db,"SELECT id,statutory_settings_version FROM payroll_runs WHERE id = ? AND company_id = ? AND status = 'draft' FOR UPDATE",[$runId,$companyId]);
+        if (!$run || $run['statutory_settings_version'] !== 'nigeria-2026-user-estimate-v1') {
+            $db->rollback();
+            fail('This draft does not have active Nigerian 2026 estimates to restore.',409);
+        }
+        $items = db_rows($db,'SELECT * FROM payroll_items WHERE run_id = ? AND company_id = ? ORDER BY id FOR UPDATE',[$runId,$companyId]);
+        foreach ($items as $item) {
+            $restored = [
+                'basic_pay'=>$item['basic_pay'],'housing'=>$item['housing'],'transport'=>$item['transport'],
+                'allowances'=>$item['allowances'],'bonus'=>$item['bonus'],
+                'paye'=>$item['previous_paye'] ?? $item['paye'],
+                'pension'=>$item['previous_pension'] ?? $item['pension'],
+                'nhf'=>$item['previous_nhf'] ?? $item['nhf'],
+                'voluntary_pension'=>$item['voluntary_pension'],
+                'salary_advance_deduction'=>$item['salary_advance_deduction'],
+                'overtime_pay'=>$item['overtime_pay'],
+                'other_deductions'=>$item['other_deductions'],
+            ];
+            $restored['voluntary_pension'] = $item['voluntary_pension'];
+            $restored['salary_advance_deduction'] = $item['salary_advance_deduction'];
+            $restored['overtime_pay'] = $item['overtime_pay'];
+            $net = payroll_net_cents($restored);
+            db_run($db,'UPDATE payroll_items SET paye = ?, pension = ?, nhf = ?, previous_paye = NULL, previous_pension = NULL, previous_nhf = NULL, net_pay = ? WHERE id = ? AND company_id = ? AND run_id = ?',[
+                $restored['paye'],$restored['pension'],$restored['nhf'],accounting_decimal_from_cents($net),$item['id'],$companyId,$runId,
+            ]);
+        }
+        db_run($db,"UPDATE payroll_runs SET statutory_settings_version = '', statutory_applied_by = NULL, statutory_applied_at = NULL WHERE id = ? AND company_id = ?",[$runId,$companyId]);
+        audit_event($db,$companyId,'payroll.nigerian_estimates_unapplied','payroll_run',(string)$runId,['staff_count'=>count($items)],$actorRole,$actorId);
+        $db->commit();
+    } catch (Throwable $error) { $db->rollback(); throw $error; }
 }
 
 function payroll_money(int $cents, string $currency = 'NGN'): string {
@@ -218,9 +345,19 @@ function payroll_profile_save(mysqli $db, int $companyId, int $userId, array $in
         : "SELECT id FROM managers WHERE id = ? AND company_id = ? AND archived_at IS NULL AND status NOT IN ('suspended','disabled','inactive')",[$staffId,$companyId]);
     if (!$staff) fail('Choose an active person from your workspace.',422);
     $salary = is_string($input['monthly_salary'] ?? null) ? trim($input['monthly_salary']) : '';
+    $housing = is_string($input['monthly_housing'] ?? null) ? trim($input['monthly_housing']) : '0';
+    $transport = is_string($input['monthly_transport'] ?? null) ? trim($input['monthly_transport']) : '0';
     $allowances = is_string($input['monthly_allowances'] ?? null) ? trim($input['monthly_allowances']) : '0';
-    if (($salaryCents = payroll_amount_cents($salary)) === null || $salaryCents <= 0 || ($allowanceCents = payroll_amount_cents($allowances)) === null) {
-        fail('Enter a positive monthly salary and valid non-negative allowances.',422);
+    $annualRent = is_string($input['annual_rent_paid'] ?? null) ? trim($input['annual_rent_paid']) : '0';
+    $rentReference = is_string($input['rent_document_reference'] ?? null) ? trim($input['rent_document_reference']) : '';
+    if (($salaryCents = payroll_amount_cents($salary)) === null || $salaryCents <= 0
+        || ($housingCents = payroll_amount_cents($housing)) === null
+        || ($transportCents = payroll_amount_cents($transport)) === null
+        || ($allowanceCents = payroll_amount_cents($allowances)) === null
+        || ($annualRentCents = payroll_amount_cents($annualRent)) === null
+        || min($housingCents,$transportCents,$allowanceCents,$annualRentCents) < 0
+        || mb_strlen($rentReference) > 255) {
+        fail('Enter valid non-negative compensation and rent amounts.',422);
     }
     $bankName = is_string($input['bank_name'] ?? null) ? trim($input['bank_name']) : '';
     $bankCode = is_string($input['bank_code'] ?? null) ? trim($input['bank_code']) : '';
@@ -232,8 +369,12 @@ function payroll_profile_save(mysqli $db, int $companyId, int $userId, array $in
         fail('Enter a bank name, valid bank code, account name, and 10-digit Nigerian account number.',422);
     }
     $ciphertext = encrypt_secret($accountNumber);
-    db_run($db,'INSERT INTO payroll_profiles (company_id,staff_role,staff_id,monthly_salary,monthly_allowances,bank_name,bank_code,account_name,account_number_ciphertext,updated_by) VALUES (?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE monthly_salary = VALUES(monthly_salary), monthly_allowances = VALUES(monthly_allowances), bank_name = VALUES(bank_name), bank_code = VALUES(bank_code), account_name = VALUES(account_name), account_number_ciphertext = VALUES(account_number_ciphertext), updated_by = VALUES(updated_by)',[
-        $companyId,$role,$staffId,accounting_decimal_from_cents($salaryCents),accounting_decimal_from_cents($allowanceCents),$bankName,$bankCode,$accountName,$ciphertext,$userId,
+    $pensionApplicable = !empty($input['pension_applicable']) ? 1 : 0;
+    $nhfApplicable = !empty($input['nhf_applicable']) ? 1 : 0;
+    $rentReliefDocumented = !empty($input['rent_relief_documented']) ? 1 : 0;
+    if ($rentReliefDocumented && ($annualRentCents <= 0 || $rentReference === '')) fail('Documented rent relief requires a positive annual rent amount and a record reference.',422);
+    db_run($db,'INSERT INTO payroll_profiles (company_id,staff_role,staff_id,monthly_salary,monthly_housing,monthly_transport,monthly_allowances,annual_rent_paid,pension_applicable,nhf_applicable,rent_relief_documented,rent_document_reference,bank_name,bank_code,account_name,account_number_ciphertext,updated_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE monthly_salary = VALUES(monthly_salary), monthly_housing = VALUES(monthly_housing), monthly_transport = VALUES(monthly_transport), monthly_allowances = VALUES(monthly_allowances), annual_rent_paid = VALUES(annual_rent_paid), pension_applicable = VALUES(pension_applicable), nhf_applicable = VALUES(nhf_applicable), rent_relief_documented = VALUES(rent_relief_documented), rent_document_reference = VALUES(rent_document_reference), bank_name = VALUES(bank_name), bank_code = VALUES(bank_code), account_name = VALUES(account_name), account_number_ciphertext = VALUES(account_number_ciphertext), updated_by = VALUES(updated_by)',[
+        $companyId,$role,$staffId,accounting_decimal_from_cents($salaryCents),accounting_decimal_from_cents($housingCents),accounting_decimal_from_cents($transportCents),accounting_decimal_from_cents($allowanceCents),accounting_decimal_from_cents($annualRentCents),$pensionApplicable,$nhfApplicable,$rentReliefDocumented,$rentReference,$bankName,$bankCode,$accountName,$ciphertext,$userId,
     ]);
     audit_event($db,$companyId,'payroll.profile_updated',$role,(string)$staffId,['bank_account_changed'=>!$existing || decrypt_secret($existing['account_number_ciphertext']) !== $accountNumber]);
 }
@@ -257,10 +398,13 @@ function payroll_create_run(mysqli $db, int $companyId, int $userId, string $act
         foreach ($people as $person) {
             $profile = $byPerson[$person['staff_role'] . ':' . $person['id']];
             $basic = payroll_amount_cents($profile['monthly_salary']);
+            $housing = payroll_amount_cents($profile['monthly_housing']);
+            $transport = payroll_amount_cents($profile['monthly_transport']);
             $allowance = payroll_amount_cents($profile['monthly_allowances']);
-            if ($basic === null || $allowance === null) throw new UnexpectedValueException('A saved payroll profile has invalid compensation amounts.');
-            db_run($db,'INSERT INTO payroll_items (company_id,run_id,staff_role,staff_id,staff_name,staff_email,bank_name,bank_code,account_name,account_number_ciphertext,basic_pay,allowances,net_pay) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[
-                $companyId,$runId,$person['staff_role'],$person['id'],$person['staff_name'],$person['staff_email'],$profile['bank_name'],$profile['bank_code'],$profile['account_name'],$profile['account_number_ciphertext'],$profile['monthly_salary'],$profile['monthly_allowances'],accounting_decimal_from_cents($basic + $allowance),
+            if ($basic === null || $housing === null || $transport === null || $allowance === null) throw new UnexpectedValueException('A saved payroll profile has invalid compensation amounts.');
+            $net = $basic + $housing + $transport + $allowance;
+            db_run($db,'INSERT INTO payroll_items (company_id,run_id,staff_role,staff_id,staff_name,staff_email,bank_name,bank_code,account_name,account_number_ciphertext,basic_pay,housing,transport,allowances,annual_rent_paid,pension_applicable,nhf_applicable,rent_relief_documented,rent_document_reference,net_pay) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
+                $companyId,$runId,$person['staff_role'],$person['id'],$person['staff_name'],$person['staff_email'],$profile['bank_name'],$profile['bank_code'],$profile['account_name'],$profile['account_number_ciphertext'],$profile['monthly_salary'],$profile['monthly_housing'],$profile['monthly_transport'],$profile['monthly_allowances'],$profile['annual_rent_paid'],$profile['pension_applicable'],$profile['nhf_applicable'],$profile['rent_relief_documented'],$profile['rent_document_reference'],accounting_decimal_from_cents($net),
             ]);
         }
         audit_event($db,$companyId,'payroll.run_created','payroll_run',(string)$runId,['staff_count'=>count($people),'period_start'=>$start,'period_end'=>$end]);
@@ -274,13 +418,21 @@ function payroll_create_run(mysqli $db, int $companyId, int $userId, string $act
 }
 
 function payroll_update_item(mysqli $db, int $companyId, int $runId, int $itemId, array $input): void {
-    $fields = ['basic_pay','allowances','bonus','paye','pension','nhf','other_deductions'];
+    $fields = ['basic_pay','housing','transport','allowances','bonus','overtime_pay','annual_rent_paid','paye','pension','nhf','voluntary_pension','salary_advance_deduction','other_deductions'];
     $values = [];
     foreach ($fields as $field) {
         $raw = is_string($input[$field] ?? null) ? trim($input[$field]) : '';
         $cents = payroll_amount_cents($raw);
         if ($cents === null || $cents < 0) fail('Enter valid non-negative amounts for every payroll line.',422);
         $values[$field] = accounting_decimal_from_cents($cents);
+    }
+    $policyFlags = [
+        'pension_applicable'=>!empty($input['pension_applicable']) ? 1 : 0,
+        'nhf_applicable'=>!empty($input['nhf_applicable']) ? 1 : 0,
+        'rent_relief_documented'=>!empty($input['rent_relief_documented']) ? 1 : 0,
+    ];
+    if ($policyFlags['rent_relief_documented'] && ($values['annual_rent_paid'] === '0.00' || trim((string)($input['rent_document_reference'] ?? '')) === '')) {
+        fail('Documented rent relief requires a positive annual rent amount and a record reference on the compensation profile.',422);
     }
     try { $net = payroll_net_cents($values); }
     catch (InvalidArgumentException $error) { fail($error->getMessage(),422); }
@@ -289,8 +441,8 @@ function payroll_update_item(mysqli $db, int $companyId, int $runId, int $itemId
         $run = db_one($db,"SELECT id FROM payroll_runs WHERE id = ? AND company_id = ? AND status = 'draft' FOR UPDATE",[$runId,$companyId]);
         $item = db_one($db,'SELECT id FROM payroll_items WHERE id = ? AND run_id = ? AND company_id = ? FOR UPDATE',[$itemId,$runId,$companyId]);
         if (!$run || !$item) { $db->rollback(); fail('Only a draft payroll item in your workspace can be changed.',409); }
-        $assignments = implode(', ',array_map(static fn(string $field): string => "`$field` = ?",[...$fields,'net_pay']));
-        db_run($db,"UPDATE payroll_items SET $assignments WHERE id = ? AND run_id = ? AND company_id = ?",[...array_values($values),accounting_decimal_from_cents($net),$itemId,$runId,$companyId]);
+        $assignments = implode(', ',array_map(static fn(string $field): string => "`$field` = ?",[...$fields,...array_keys($policyFlags),'net_pay']));
+        db_run($db,"UPDATE payroll_items SET $assignments WHERE id = ? AND run_id = ? AND company_id = ?",[...array_values($values),...array_values($policyFlags),accounting_decimal_from_cents($net),$itemId,$runId,$companyId]);
         audit_event($db,$companyId,'payroll.item_updated','payroll_item',(string)$itemId,['net_pay'=>accounting_decimal_from_cents($net)]);
         $db->commit();
     } catch (Throwable $error) { $db->rollback(); throw $error; }

@@ -25,6 +25,20 @@ const menuButton = document.querySelector('[data-menu]');
 const sidebar = document.getElementById('sidebar');
 const backdrop = document.querySelector('.menu-backdrop');
 const mobile = window.matchMedia('(max-width: 680px)');
+const sidebarCollapseButton = document.querySelector('[data-sidebar-collapse]');
+const suiteBody = document.querySelector('.suite-body');
+const sidebarStorageKey = 'simplr.sidebar-collapsed';
+function setSidebarCollapsed(collapsed) {
+  if (!sidebar || !sidebarCollapseButton) return;
+  sidebar.classList.toggle('collapsed', collapsed);
+  suiteBody?.classList.toggle('sidebar-collapsed', collapsed);
+  sidebarCollapseButton.setAttribute('aria-expanded', String(!collapsed));
+  sidebarCollapseButton.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  sidebarCollapseButton.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  localStorage.setItem(sidebarStorageKey, String(collapsed));
+}
+sidebarCollapseButton?.addEventListener('click', () => setSidebarCollapsed(!sidebar.classList.contains('collapsed')));
+if (sidebarCollapseButton) setSidebarCollapsed(localStorage.getItem(sidebarStorageKey) === 'true');
 function setMenu(open, restoreFocus = false) {
   if (!sidebar || !menuButton) return;
   sidebar.classList.toggle('open', open);

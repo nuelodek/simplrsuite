@@ -110,6 +110,7 @@ function suite_start(string $title, string $active, array $user): void {
         ['accounting','Accounting','book','/users/admin/accounting.php','Business'],
         ['payroll','Payroll','wallet','/users/admin/payroll.php','Business'],
         ['reports','Reports','chart','/users/admin/reports.php','Insights'],
+        ['neurons','Neurons','spark','/users/admin/neurons.php','Insights'],
         ['activity','Activity','pulse','/users/admin/activity.php','Insights'],
         ['modules','All tools','box','/users/admin/modules.php','Workspace'],
         ['access','Staff access','shield','/users/admin/access.php','Workspace'],
@@ -152,7 +153,7 @@ function suite_start(string $title, string $active, array $user): void {
             ['Projects, tasks, and people','Use these pages to organize work, track tasks, keep files, and manage departments and team records.',['projects','tasks','files','people']],
             ['Business tools','Open the relevant area for customer relationships, retail checkout, finances, recruiting, or browse all available tools.',['sales','pos','finance','recruiting','modules']],
             ['Accounting','Post balanced journal entries and review financial statements and ratios.',['accounting']],
-            ['Planning and insight','Use Calendar to review events, Reports to summarize activity, and Activity to review workspace changes.',['calendar','reports','activity']],
+            ['Planning and insight','Use Calendar to review events, Reports to summarize activity, Neurons to schedule read-only workspace snapshots, and Activity to review workspace changes.',['calendar','reports','neurons','activity']],
             ['Workspace controls','Manage staff access, settings, billing, and integrations, or ask for help.',['access','settings','billing','integrations','help']],
         ],
     };
@@ -169,17 +170,20 @@ function suite_start(string $title, string $active, array $user): void {
     $personName = match ($role) {
         'employee' => trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')),
         'manager' => trim((string)($user['manager_name'] ?? '')),
-        default => (string)$user['company_name'],
-    } ?: (string)$user['company_name'];
+        'admin' => 'Workspace owner',
+        default => (string)($user['first_name'] ?? ''),
+    } ?: 'Workspace member';
     $initial = e(mb_strtoupper(mb_substr($personName, 0, 1)));
-    echo '<body class="suite"><a class="skip-link" href="#main">Skip to content</a><aside class="suite-sidebar" id="sidebar">' . brand() . '<button type="button" class="icon-button sidebar-close" data-menu-close aria-label="Close navigation">×</button><nav class="sidebar-nav" aria-label="Main navigation">';
+    $logoInitial = $workspaceViewer ? e(mb_strtoupper(mb_substr((string)$user['company_name'], 0, 1))) : $initial;
+    $workspaceLogo = $workspaceViewer ? (string)(db_one(database(),'SELECT company_logo_path FROM workspace_settings WHERE company_id = ?',[(int)$user['company_id']])['company_logo_path'] ?? '') : '';
+    echo '<body class="suite"><a class="skip-link" href="#main">Skip to content</a><aside class="suite-sidebar" id="sidebar"><div class="sidebar-header">' . brand() . '<button type="button" class="icon-button sidebar-collapse" data-sidebar-collapse aria-label="Collapse sidebar" title="Collapse sidebar" aria-expanded="true">' . icon('columns') . '</button></div><button type="button" class="icon-button sidebar-close" data-menu-close aria-label="Close navigation">×</button><nav class="sidebar-nav" aria-label="Main navigation">';
     $group = '';
     foreach ($nav as [$id,$label,$glyph,$url,$section]) {
         if ($section !== '' && $section !== $group) echo '<span class="nav-group-label">' . e($section) . '</span>';
         $group = $section;
-        echo '<a href="' . e($url) . '"' . ($id === $active ? ' class="active" aria-current="page"' : '') . '>' . icon($glyph) . e($label) . '</a>';
+        echo '<a href="' . e($url) . '" title="' . e($label) . '"' . ($id === $active ? ' class="active" aria-current="page"' : '') . '>' . icon($glyph) . '<span class="sidebar-link-label">' . e($label) . '</span></a>';
     }
-    echo '</nav><div class="sidebar-bottom"><form method="post" action="/users/admin/logout.php">' . csrf_field() . '<button class="logout-button" type="submit">' . icon('logout') . 'Sign out</button></form></div></aside><button type="button" class="menu-backdrop" data-menu-close aria-label="Close navigation" hidden></button><div class="suite-body"><header class="suite-topbar"><button class="icon-button mobile-menu" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" data-menu>' . icon('menu') . '</button><span class="breadcrumb">Workspace <span>/</span> <strong>' . e($title) . '</strong></span>';
+    echo '</nav><div class="sidebar-bottom"><form method="post" action="/users/admin/logout.php">' . csrf_field() . '<button class="logout-button" type="submit" title="Sign out">' . icon('logout') . '<span class="sidebar-link-label">Sign out</span></button></form></div></aside><button type="button" class="menu-backdrop" data-menu-close aria-label="Close navigation" hidden></button><div class="suite-body"><header class="suite-topbar"><button class="icon-button mobile-menu" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" data-menu>' . icon('menu') . '</button><span class="breadcrumb">Workspace <span>/</span> <strong>' . e($title) . '</strong></span>';
     echo '<button type="button" class="command-trigger" data-command-open aria-keyshortcuts="Control+K Meta+K">' . icon('search') . '<span>Search or jump to…</span><kbd>Ctrl K</kbd></button><div class="topbar-end">';
     $creates = array_values(array_filter($commands, fn($item) => $item['group'] === 'Create' && in_array($item['key'] ?? '', ['tasks','projects','events','leads','customers','deals','expenses','invoices','jobs'], true)));
     if ($creates) {
@@ -197,7 +201,10 @@ function suite_start(string $title, string $active, array $user): void {
         } else echo '<p class="notification-empty">No alerts yet.</p>';
         echo '<a class="notification-all" href="/users/admin/notifications.php">View all alerts' . ($unread ? ' (' . $unread . ' unread)' : '') . '</a></div></details>';
     }
-    echo '<button type="button" class="icon-button tour-trigger" data-tour-open aria-label="Dashboard tour" title="Take the dashboard tour">' . icon('help') . '</button><div class="topbar-workspace" title="' . e($workspaceKind) . '"><span class="status-dot"></span><span><strong>' . e($user['company_name']) . '</strong><small>' . e($workspaceKind) . '</small></span></div><details class="topbar-menu user-menu"><summary aria-label="Account menu"><span class="avatar">' . $initial . '</span>' . ($role === 'admin' ? '' : '<span class="user-menu-name">' . e($personName) . '</span>') . icon('chevron') . '</summary><div class="menu-popover"><div class="menu-identity"><span class="avatar">' . $initial . '</span><div><strong>' . e($personName) . '</strong><small>' . e($user['email']) . '</small></div></div><span class="menu-workspace"><span class="status-dot"></span>' . e($workspaceKind) . '</span>';
+    echo '<details class="topbar-menu user-menu"><summary class="company-logo-button" aria-label="Company logo and account menu" title="Company logo and account menu">';
+    if ($workspaceLogo !== '') echo '<img class="company-logo-image" src="/users/workspace-logo.php" alt="">';
+    else echo '<span class="avatar">' . $logoInitial . '</span>';
+    echo '</summary><div class="menu-popover"><div class="menu-identity"><span class="avatar">' . $initial . '</span><div><strong>' . e($personName) . '</strong><small>' . e($user['email']) . '</small></div></div><span class="menu-workspace"><span class="status-dot"></span>' . e($workspaceKind) . '</span><button type="button" data-tour-open>' . icon('help') . 'Dashboard tour</button>';
     if ($role === 'admin') echo '<a href="/users/admin/settings.php">' . icon('settings') . 'Workspace settings</a><a href="/users/admin/billing.php">' . icon('card') . 'Billing</a>';
     if (in_array($role, ['employee','manager'], true)) echo '<a href="/users/employees/workspace.php#profile">' . icon('user') . 'My profile</a>';
     if ($role !== 'talent') echo '<a href="/users/help.php">' . icon('help') . 'Get help</a>';

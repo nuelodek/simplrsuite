@@ -10,6 +10,7 @@ function scheduled_jobs(): array {
     return [
         'notifications'=>['label'=>'Alerts, reminders and email outbox','every'=>1],
         'github-sync'=>['label'=>'GitHub issue sync','every'=>max(5,(int)config('GITHUB_SYNC_MINUTES','15'))],
+        'neurons'=>['label'=>'Scheduled workspace automations','every'=>1],
     ];
 }
 

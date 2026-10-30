@@ -52,8 +52,8 @@ staging server and the owner's go-ahead. Paths assume the app lives in
 ## 3. Production window (host)
 
 1. Announce the window to customers if downtime is expected.
-2. Pause the two worker jobs by commenting out the notifications and GitHub-sync
-   lines from `deploy/scheduler.md`; keep health checks enabled and account for
+2. Pause the three worker jobs by commenting out the notifications, GitHub-sync
+   and neurons lines from `deploy/scheduler.md`; keep health checks enabled and account for
    the expected late-job alerts during the window. Wait for running jobs to finish
    (`php scripts/scheduler_status.php` shows no `running` job).
 3. Back up everything that must be restored together, to storage off this host:
